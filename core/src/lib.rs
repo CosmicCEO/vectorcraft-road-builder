@@ -2,8 +2,13 @@
 
 pub mod abi;
 pub mod builder;
+pub mod crosssection;
 pub mod export;
 pub mod geom;
+pub mod library;
+pub mod offset;
+pub mod output;
 pub mod pmap;
+pub mod roads;
 pub mod scene;
 pub mod vcdoc;

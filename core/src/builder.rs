@@ -2,10 +2,11 @@
 //! Everything it creates is named `gen.*`, so a rebuild replaces the previous result and never touches the paths the owner edits.
 
 use crate::geom::{P, Poly, add, scale};
-use crate::scene::Scene;
-use crate::vcdoc::items_from_filter_input;
+use crate::output::Out;
+use crate::roads::{self, Spec, anchor_from, segment_id};
+use crate::scene::{Scene, is_junction_name};
+use crate::vcdoc::{Item, items_from_filter_input};
 use serde_json::Value;
-use std::fmt::Write;
 
 pub const GEN_PREFIX: &str = "gen.";
 
@@ -35,7 +36,7 @@ fn painted(sc: &Scene, key: &str, s: f64) -> bool {
 }
 
 /// Drops points that lie within `tol` metres of the straight line between their kept neighbours (iterative Douglas-Peucker).
-fn simplify(pts: &[P], tol: f64) -> Vec<P> {
+pub(crate) fn simplify(pts: &[P], tol: f64) -> Vec<P> {
     if pts.len() < 3 {
         return pts.to_vec();
     }
@@ -116,93 +117,15 @@ fn side_edge(sc: &Scene, side: f64, s: f64) -> f64 {
     keys.iter().find_map(|k| sc.curves.get(*k).and_then(|c| c.at(s))).unwrap_or(if side > 0.0 { 3.6 } else { -17.2 })
 }
 
-/// Output text under construction: written directly (not as a JSON tree) because plug-ins run in an interpreter under an instruction budget.
-struct Out {
-    text: String,
-    first: bool,
-}
-
-impl Out {
-    fn new() -> Out {
-        Out { text: String::from("{\"objects\":["), first: true }
-    }
-
-    fn sep(&mut self) {
-        if !self.first {
-            self.text.push(',');
-        }
-        self.first = false;
-    }
-
-    fn keep(&mut self, id: i64) {
-        self.sep();
-        let _ = write!(self.text, "{{\"id\":{id}}}");
-    }
-
-    /// A new stroked path object; `map` converts each world point to a document point.
-    fn path(&mut self, name: &str, subs: &[Vec<P>], map: impl Fn(P) -> P, rgb: [f64; 3], width: f64, closed: bool) {
-        self.sep();
-        self.text.push_str("{\"name\":");
-        self.text.push_str(&serde_json::to_string(name).unwrap_or_default());
-        self.text.push_str(",\"path\":{\"subpaths\":[");
-        for (i, sub) in subs.iter().enumerate() {
-            if i > 0 {
-                self.text.push(',');
-            }
-            self.text.push_str("{\"anchors\":[");
-            for (k, &w) in sub.iter().enumerate() {
-                let p = map(w);
-                if k > 0 {
-                    self.text.push(',');
-                }
-                self.text.push_str("{\"p\":[");
-                num(&mut self.text, p[0]);
-                self.text.push(',');
-                num(&mut self.text, p[1]);
-                self.text.push_str("]}");
-            }
-            self.text.push_str(if closed { "],\"closed\":true}" } else { "],\"closed\":false}" });
-        }
-        self.text.push_str("]},\"strokes\":[{\"paint\":{\"type\":\"solid\",\"color\":{\"model\":\"rgb\",\"r\":");
-        num(&mut self.text, rgb[0]);
-        self.text.push_str(",\"g\":");
-        num(&mut self.text, rgb[1]);
-        self.text.push_str(",\"b\":");
-        num(&mut self.text, rgb[2]);
-        self.text.push_str("}},\"width\":");
-        num(&mut self.text, width);
-        self.text.push_str(",\"cap\":\"butt\",\"join\":\"miter\",\"miterLimit\":4}]}");
-    }
-
-    fn finish(mut self) -> String {
-        self.text.push_str("]}");
-        self.text
-    }
-}
-
-/// A number to the nearest millimetre, without float-formatting machinery.
-fn num(out: &mut String, x: f64) {
-    let v = (x * 1000.0).round() as i64;
-    if v < 0 {
-        out.push('-');
-    }
-    let v = v.unsigned_abs();
-    let _ = write!(out, "{}", v / 1000);
-    let frac = v % 1000;
-    if frac != 0 {
-        let digits = format!("{frac:03}");
-        out.push('.');
-        out.push_str(digits.trim_end_matches('0'));
-    }
-}
-
 /// Filter output text: every source object kept by id, the old `gen.*` paths dropped, fresh `gen.*` paths added.
 pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
     let items = items_from_filter_input(input);
-    let sc = Scene::from_items(&items)?;
-    let stub_len = params["stubLength"].as_f64().unwrap_or(28.0);
-    let stub_w = params["stubWidth"].as_f64().unwrap_or(8.0);
-    let to_doc = |p: P| sc.to_doc(p);
+    let spec = Spec::from_document_data(&params["_context"]["documentData"]);
+    let has_road = items.iter().any(|i| segment_id(&i.name).is_some());
+    let has_legacy = items.iter().any(|i| i.name == "centerline");
+    if !has_road && !has_legacy {
+        return Err("Nothing to build. Draw a line and name it road.<id> (or open a pmap that has a centerline), then Select All so the road is included.".into());
+    }
 
     let mut out = Out::new();
     for it in items.iter().filter(|i| !i.name.starts_with(GEN_PREFIX)) {
@@ -210,6 +133,21 @@ pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
             out.keep(id);
         }
     }
+    if has_road {
+        roads::build(&items, &spec, &mut out);
+    }
+    if has_legacy {
+        build_legacy(&mut out, &items, params)?;
+    }
+    Ok(out.finish())
+}
+
+/// The original model: one `centerline` plus profile curves, flags and junction markers (see `scene`).
+fn build_legacy(out: &mut Out, items: &[Item], params: &Value) -> Result<(), String> {
+    let sc = Scene::from_items(items)?;
+    let stub_len = params["stubLength"].as_f64().unwrap_or(28.0);
+    let stub_w = params["stubWidth"].as_f64().unwrap_or(8.0);
+    let to_doc = |p: P| sc.to_doc(p);
 
     for (key, rgb, width, dash) in STYLE {
         let r = runs(&sc, key, dash);
@@ -239,7 +177,7 @@ pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
             out.path(&format!("{GEN_PREFIX}stop.{tag}"), &[vec![along(7.0, -hw), along(7.0, hw)]], to_doc, [0.95, 0.95, 0.95], 0.6, false);
         }
     }
-    Ok(out.finish())
+    Ok(())
 }
 
 /// The same as a JSON value (for tests and callers that want one).
@@ -281,4 +219,74 @@ pub fn add_junction_text(input: &Value, params: &Value) -> Result<String, String
     }
     out.path(&name, &[square], |p| sc.to_doc(p), [0.0, 0.4, 0.8], 0.5, true);
     Ok(out.finish())
+}
+
+/// Names that already mean something else, so a plain line must not be mistaken for them.
+fn is_reserved_name(name: &str) -> bool {
+    name == "centerline" || ["gen.", "profile.", "flag.", "arrow."].iter().any(|p| name.starts_with(p)) || is_junction_name(name)
+}
+
+/// Command "Set Cross-section": stores the road's cross-section (see `crosssection`) in the document's plug-in data. Applies to the
+/// selected `road.*` lines, or to the segment named in `segment`; a single plain line is turned into a road with a fresh id.
+pub fn set_cross_section_text(input: &Value, params: &Value) -> Result<String, String> {
+    let items = items_from_filter_input(input);
+    let mut spec = Spec::from_document_data(&params["_context"]["documentData"]);
+    let text = params["cross_section"].as_str().map(str::trim).filter(|t| !t.is_empty()).ok_or("Write the cross-section, for example: bike-lane | lane back x2 | margin 3 | lane fwd x2 | bike-lane")?;
+    let anchor = params["anchor"].as_str().and_then(anchor_from);
+    let clean = |t: &str| t.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(16).collect::<String>();
+
+    let mut targets: Vec<String> = Vec::new();
+    let mut renames: Vec<(i64, String)> = Vec::new();
+    if let Some(seg) = params["segment"].as_str().map(clean).filter(|s| !s.is_empty()) {
+        targets.push(seg);
+    } else {
+        for it in &items {
+            if let Some(id) = segment_id(&it.name).filter(|id| !targets.contains(id)) {
+                targets.push(id);
+            }
+        }
+        // "Selected pieces only": give them an id of their own, starting from a copy of the old description, so the other pieces keep theirs.
+        if params["scope"].as_str() == Some("selected") && !targets.is_empty() {
+            let mut fresh: Vec<String> = Vec::new();
+            for old in &targets {
+                let new = (1..).map(|n| format!("r{n}")).find(|id| !spec.segments.contains_key(id) && !fresh.contains(id) && !targets.contains(id)).unwrap_or_default();
+                for it in items.iter().filter(|i| segment_id(&i.name).as_deref() == Some(old.as_str())) {
+                    if let Some(iid) = it.id {
+                        renames.push((iid, format!("road.{new}")));
+                    }
+                }
+                if let Some(prev) = spec.segments.get(old).cloned() {
+                    spec.segments.insert(new.clone(), prev);
+                }
+                fresh.push(new);
+            }
+            targets = fresh;
+        }
+        if targets.is_empty() {
+            let plain: Vec<&Item> = items.iter().filter(|i| i.id.is_some() && !i.subs.is_empty() && !is_reserved_name(&i.name)).collect();
+            match plain.as_slice() {
+                [] => return Err("Select the line to describe (or give its segment id).".into()),
+                [one] => {
+                    let taken = |id: &str| spec.segments.contains_key(id);
+                    let id = (1..).map(|n| format!("r{n}")).find(|id| !taken(id)).unwrap_or_default();
+                    renames.push((one.id.unwrap_or_default(), format!("road.{id}")));
+                    targets.push(id);
+                }
+                _ => return Err("More than one line is selected: select the one line to describe.".into()),
+            }
+        }
+    }
+    for id in &targets {
+        spec.set_cross_section(id, text, anchor.clone())?;
+    }
+    let mut out = Out::new();
+    for it in &items {
+        if let Some(id) = it.id {
+            match renames.iter().find(|r| r.0 == id) {
+                Some((_, name)) => out.rename(id, name),
+                None => out.keep(id),
+            }
+        }
+    }
+    Ok(out.finish_with(Some(&spec.to_value())))
 }

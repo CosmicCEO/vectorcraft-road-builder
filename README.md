@@ -23,7 +23,30 @@ shows up in git as a one-line diff.
 
 Add a junction without dragging: Select All, then Object > Plug-ins > Road Builder > Add Junction (route metre, kind, side, street name).
 
-## What you edit (naming contract)
+## Roads from a description (new in 0.2)
+
+Draw any line (curves and angle points as you like), select it, and run **Object > Plug-ins > Road Builder > Describe Road**. Write the
+road as a short list, left to right, in plain words or the shorthand:
+
+```
+facing N: bike-lane | apron | lane S x2 | margin 3 | lane N x2 | apron | bike-lane
+```
+
+The line becomes `road.r1`, the description is stored in the document, and **Build Road** draws every element as a coloured strip with
+the right paint between them (dashed white between lanes going the same way, double yellow between opposite ways, curb lines at a
+margin, white edge lines), following the line exactly: Bezier curves stay smooth, an angle point stays a sharp corner (outside mitred,
+inside trimmed).
+
+- **Elements** come from `library/elements.json` (lane, turn-pocket, bike-lane, apron, shoulder, margin, median, sidewalk, parking-lane,
+  and more), with typical US widths marked "typical, not surveyed". Any width can be overridden in the description (`lane 3.3`, `margin 10ft`).
+- **Break a line** (Split Path) and both pieces keep the description. To change one piece only, select it and run Describe Road with
+  scope `selected`: it gets an id of its own.
+- **The line follows** the middle of the median or margin when there is one (so removing a side element does not move the road), else the
+  middle of the road; change it with the `anchor` setting (`center`, `left`, `right`, or an element name).
+- Not built yet: junctions between described roads, turn pockets that start and end part-way along a road, lane arrows, and the
+  companion panel. See `docs/DESIGN.md`.
+
+## What you edit with the older centerline model (naming contract)
 
 | Path name | Meaning |
 |---|---|

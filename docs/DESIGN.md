@@ -78,6 +78,21 @@ is making the spec general and putting the conversation in front of it.
 | (d) Panel reaches the agent | `claude -p` runs headless on the existing login: no API key, about 2.4 s and under a cent for a trivial call, and it sees all 32 VectorCraft tools. | The panel can start Claude per request. It must give that Claude its own MCP config using `--connect 127.0.0.1:7979` so it edits the same live VectorCraft the panel shows (the default server is a separate headless copy). |
 | (e) Corners | Today's method (sample every 2 m, offset along the local normal) mishandles a 90 degree corner. Outside edge: cut straight across, the sharp corner is 7 m from the nearest drawn point. Inside edge: runs 7 m past the true corner, then jumps back 8.6 m and crosses itself. Smooth and angle anchors are distinguishable in the path data (`kind: "Smooth"`, handles). | The offset must be rewritten with proper joins: mitre (or chosen join) outside, trim inside, smooth through curves. This is the first piece of phase 1. |
 
+## Phase 1 status (first slice done, in the real VectorCraft engine)
+Built and tested (33 native tests, plus scripted runs of both stories in the real engine, with renders):
+- `offset.rs`: offset with proper joins (sharp outside corner, trimmed inside, smooth through curves, loops cut out). Fixes spike (e).
+- `library/elements.json` + `library.rs`: 15 elements with typical US widths, aliases, per-drawing overrides.
+- `crosssection.rs`: the shorthand and plain words ("2 south lanes", "3 m grassy curbed margin"), canonical printing, layout from the
+  path's heading, compass words resolved against the path direction, anchors (auto, center, left, right, or an element).
+- `roads.rs`: segments `road.<id>`, description stored in `documentData`, strips and painted boundaries, pieces share an id,
+  command **Set Cross-section** (plain line becomes a road; `scope: selected` gives selected pieces their own id).
+- Real-engine findings: a fill is the paint itself (no `paint` wrapper); `documentData` written by one run is read by the next
+  (confirms spike b end to end); command ids are lower-case with underscores and a parameter cannot be called `id`.
+
+Still to do in phase 1: migrate Ross Bridge onto cross-sections, pmap v2 export of roads (the importer cannot restore `documentData`,
+so the `.vectorcraft` file stays the master and pmap v2 is the hand-off to the simulation), connecting segments end to end, and removing
+the last Ross-Bridge-specific names from the core. Junction templates, part-way turn pockets and arrows are phase 3.
+
 ## Verification at each phase
 Native unit tests for the core; the real VectorCraft engine via `scripts/roundtrip.sh` and the MCP loop (`scripts/mcp-smoke.mjs`);
 a visual check by screenshot against the story, step by step.
