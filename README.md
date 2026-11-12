@@ -59,6 +59,7 @@ cargo test                                           # core logic natively, incl
 sh scripts/roundtrip.sh examples/sample.pmap out/ /path/to/vectorcraft-cli     # through the real VectorCraft engine
 node scripts/pmap-diff.mjs a.pmap b.pmap             # what changed, in plain words
 node scripts/vc.mjs <method> '<json>'                # drive a running VectorCraft (open -a VectorCraft --args --control 7979)
+node scripts/mcp-smoke.mjs <cli> x.pmap --demo out/y.pmap   # the same loop over the MCP protocol, as an agent does it
 ```
 
 Layout: `core/` (geometry, `pmap` import/export, `Build Road`, ABI glue; unit-tested natively), `filter/ exporter/ importer/` (thin
