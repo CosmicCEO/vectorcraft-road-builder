@@ -1,0 +1,2 @@
+{"command": "select.all"}
+{"command": "plugin.run", "params": {"id": "com.cosmicceo.roadbuilder.build"}}

@@ -1,0 +1,47 @@
+{
+"format": "vectorcraft-road-builder/pmap",
+"version": 1,
+"length": 300,
+"centerline": [
+[0, 0],
+[0, 100],
+[50, 160],
+[50, 300]
+],
+"profile": {
+"nbEdge": [
+[0, 3.6],
+[150, 3.6],
+[200, 5.6],
+[300, 5.6]
+],
+"nbLane": [
+[0, 0],
+[300, 0]
+],
+"sbEdge": [
+[0, -10],
+[300, -10]
+],
+"sbInner": [
+[0, -8],
+[300, -8]
+]
+},
+"flags": {
+"gap": [
+[100, 120]
+],
+"mouth": [
+[40, 50]
+]
+},
+"junctions": [
+{"id": "J1", "s": 60, "kind": "tee", "side": "right", "label": "Deer-Valley-Dr"},
+{"id": "J2", "s": 200, "kind": "cross", "side": "both", "label": ""}
+],
+"arrows": [
+{"s": 30, "off": -1.8, "kind": "thru", "south": false},
+{"s": 40, "off": -8.3, "kind": "left", "south": true}
+]
+}

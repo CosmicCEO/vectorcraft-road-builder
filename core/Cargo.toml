@@ -1,0 +1,10 @@
+[package]
+name = "road-builder-core"
+description = "Road model, importer, builder and exporter logic shared by the VectorCraft Road Builder plug-ins"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true
