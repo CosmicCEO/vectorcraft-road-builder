@@ -1,5 +1,8 @@
 // The panel page. Everything the server sends is shown with textContent, never as HTML.
 const $ = (id) => document.getElementById(id);
+// ?zoom=0.6 shrinks the page (for a small window, or a screenshot).
+const zoom = Number(new URLSearchParams(location.search).get("zoom"));
+if (zoom > 0.2 && zoom < 3) document.body.style.zoom = String(zoom);
 let state = null;
 
 async function post(action, body = {}) {
@@ -73,6 +76,8 @@ function show(s) {
   if (s.road) drawItems($("items"), $("bar"), $("total"), s.road, !s.pending);
 
   $("proposal").hidden = !s.pending;
+  $("asked").textContent = s.pending?.description ? `You asked: “${s.pending.description}”` : "";
+  $("asked").hidden = !s.pending?.description;
   if (s.pending) {
     drawItems($("pitems"), $("pbar"), $("ptotal"), s.pending, true);
     $("shorthand").value = s.pending.canonical;
