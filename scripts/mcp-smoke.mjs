@@ -2,14 +2,21 @@
 // Usage: node scripts/mcp-smoke.mjs <path-to-vectorcraft-cli> <pmap-to-open> [--demo out.pmap | tool-name tool-json-args]
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 
 const [cli, pmap, ...rest] = process.argv.slice(2);
 if (!cli || !pmap) {
   console.error("usage: mcp-smoke.mjs <vectorcraft-cli> <file.pmap> [tool args-json]");
   process.exit(2);
 }
-const root = resolve(import.meta.dirname, "../../..");
+// Confine the server to the folder that holds everything this run touches: the plug-in, the .pmap, and the export.
+const commonDir = (a, b) => {
+  const [x, y] = [a.split(sep), b.split(sep)];
+  let i = 0;
+  while (i < x.length && x[i] === y[i]) i++;
+  return x.slice(0, i).join(sep) || sep;
+};
+const root = [resolve(import.meta.dirname, ".."), resolve(pmap), ...(rest[0] === "--demo" ? [resolve(rest[1])] : [])].reduce(commonDir);
 const child = spawn(cli, ["mcp", "--automation-read-root", root, "--automation-write-root", root], { stdio: ["pipe", "pipe", "inherit"] });
 let buffer = "";
 const waiting = new Map();
