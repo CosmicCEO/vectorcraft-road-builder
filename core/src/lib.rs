@@ -5,6 +5,7 @@ pub mod builder;
 pub mod crosssection;
 pub mod export;
 pub mod geom;
+pub mod junction;
 pub mod library;
 pub mod offset;
 pub mod output;

@@ -8,7 +8,7 @@ use serde_json::Value;
 const MANIFEST: &str = r#"{
   "id": "com.cosmicceo.roadbuilder.build",
   "name": "Build Road",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "kind": "filter",
   "author": "CosmicCEO",
   "description": "Builds roads from the lines you draw: a line named road.<id> becomes the road described by its cross-section (lanes, bike lanes, margins ...). Select All first, so every road is included.",
@@ -25,6 +25,14 @@ const MANIFEST: &str = r#"{
         "segment": {"type": "string", "default": "", "maxLength": 16, "label": "Road id", "help": "Leave empty to use the selected line (a plain line becomes a new road)."},
         "anchor": {"type": "string", "default": "", "maxLength": 24, "label": "Line follows", "help": "Which part of the road the drawn line follows: auto (the middle of the median or margin if there is one, else the middle of the road), center, left, right, or an element name such as margin. Leave empty to keep the current setting."},
         "scope": {"type": "choice", "options": ["segment", "selected"], "default": "segment", "help": "segment: every piece of this road. selected: only the selected pieces (they get an id of their own, e.g. after you broke the line and want to change one piece)."}
+      }
+    },
+    {
+      "id": "set_junction",
+      "label": "Describe Junction",
+      "params": {
+        "description": {"type": "string", "default": "{\"legs\": [{\"side\": \"left\", \"cross_section\": \"lane fwd | lane back\"}, {\"side\": \"right\", \"cross_section\": \"lane fwd | lane back\"}], \"control\": \"signal\", \"crosswalks\": true}", "maxLength": 3000, "label": "Junction (JSON)", "help": "legs: up to two ({side: left/right or west/east/north/south, cross_section, length}); control: none, signal or stop; crosswalks: true/false; radius: kerb corner radius in metres. No legs = just carry the road across the gap."},
+        "junction": {"type": "string", "default": "", "maxLength": 16, "label": "Junction id", "help": "Leave empty to use the selected connecting line (a plain line becomes a new junction)."}
       }
     },
     {
@@ -46,6 +54,7 @@ fn run(input: &[u8], params: &Value) -> Result<Output, String> {
     match params["_context"]["command"].as_str() {
         Some("add_junction") => builder::add_junction_text(&input, params),
         Some("set_cross_section") => builder::set_cross_section_text(&input, params),
+        Some("set_junction") => builder::set_junction_text(&input, params),
         _ => builder::build_text(&input, params),
     }
     .map(Output::Raw)

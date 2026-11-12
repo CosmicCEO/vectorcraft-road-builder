@@ -18,6 +18,28 @@
 
   <section id="context" class="card"></section>
 
+  <section id="modeCard" class="card" hidden>
+    <fieldset class="mode">
+      <label><input type="radio" name="mode" value="road" checked> A road</label>
+      <label><input type="radio" name="mode" value="connection"> A connection between two roads</label>
+    </fieldset>
+    <div id="matchRow" class="row" hidden>
+      <button id="match" class="plain">Connect and match: carry the road across</button>
+    </div>
+  </section>
+
+  <section id="junctionCard" class="card" hidden>
+    <h2 id="jtitle">Junction</h2>
+    <p id="jasked" class="muted asked" hidden></p>
+    <p id="jsummary"></p>
+    <ol id="jlegs" class="items"></ol>
+    <div class="row wrap">
+      <label>Control <select id="jcontrol"><option value="none">none</option><option value="signal">traffic signals</option><option value="stop">stop signs</option></select></label>
+      <label><input type="checkbox" id="jcross"> Crosswalks</label>
+    </div>
+    <div class="row"><button id="jcancel" class="plain" hidden>Cancel</button></div>
+  </section>
+
   <section id="road" class="card" hidden>
     <div id="bar" class="bar" aria-label="Cross-section to scale"></div>
     <ol id="items" class="items"></ol>
@@ -36,7 +58,7 @@
   </section>
 
   <section class="card">
-    <label for="words">Describe the road, or the change you want</label>
+    <label for="words" id="wordsLabel">Describe the road, or the change you want</label>
     <textarea id="words" rows="3" placeholder="e.g. a bike lane, an apron, two south lanes, a 3 m grassy curbed margin, two north lanes, apron, bike lane"></textarea>
     <div class="row">
       <button id="propose">Propose</button>

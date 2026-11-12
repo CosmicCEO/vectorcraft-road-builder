@@ -29,3 +29,5 @@ export const parseCrossSection = (text) => runCli(["parse", text]);
 export const library = () => runCli(["library"]);
 /** op: ["delete", i] | ["move", from, to] | ["width", i, metres] | ["insert", i, "text"] */
 export const editCrossSection = (text, op) => runCli(["edit", text, ...op.map(String)]);
+/** Checks a junction description (JSON text). {ok, junction, summary} or {ok: false, error}. */
+export const parseJunction = (jsonText) => runCli(["parse-junction", jsonText]);

@@ -33,3 +33,49 @@ export function extractLine(reply) {
   const lines = cleaned.split("\n").map((l) => l.trim().replace(/^["'`]+|["'`]+$/g, "")).filter(Boolean);
   return lines.find((l) => /^facing\b/i.test(l)) ?? lines.find((l) => l.includes("|")) ?? lines[0] ?? "";
 }
+
+export function junctionSystemPrompt(lib) {
+  const els = lib.elements.map((e) => e.id).join(", ");
+  return `You turn a plain-language description of a road junction into one JSON object. Reply with the JSON object only: no explanation, no code fence.
+
+The junction is where a short connecting line joins two road pieces; the main road carries on through it. The JSON describes what crosses it:
+{"legs": [{"side": "...", "cross_section": "...", "length": 40}], "control": "none|signal|stop", "crosswalks": false, "radius": 6}
+- legs: 0, 1 or 2 side roads. No legs means just carry the road across the gap. One leg is a T-junction, two legs (one each side) a four-way junction.
+- side: "west", "east", "north" or "south" if the description gives compass directions, otherwise "left" or "right" as seen travelling along the main road. A leg must cross the main road, so never use the direction the main road runs.
+- cross_section: the side road written in the Road Builder shorthand: elements separated by " | ", each an element name with optional direction (fwd, back), width in metres, or repeat (x2). Elements: ${els}. A two-lane road is "lane fwd | lane back"; a "rural road" is two lanes, possibly with shoulders ("shoulder | lane fwd | lane back | shoulder").
+- length: how far the leg is drawn, in metres (default 40).
+- control: "signal" for traffic lights or signals, "stop" for stop signs on the side roads, otherwise "none".
+- crosswalks: true if there are crosswalks, cross walks or pedestrian crossings.
+- radius: corner radius in metres (default 6).
+Do not add a turn pocket or turn lane here: describe only the legs, control and crosswalks.
+
+EXAMPLE
+Description: This is a 4 way intersection. The west leg is a two lane rural road, the east is a two lane rural road. There are traffic lights and cross walks at each side.
+{"legs": [{"side": "west", "cross_section": "lane fwd | lane back", "length": 40}, {"side": "east", "cross_section": "lane fwd | lane back", "length": 40}], "control": "signal", "crosswalks": true, "radius": 6}
+
+EDITING
+When a current junction is given, apply the requested change and return the COMPLETE updated object, keeping everything not mentioned exactly as it was.`;
+}
+
+export function junctionUserPrompt({ description, current }) {
+  return current ? `Current junction:\n${JSON.stringify(current)}\n\nChange requested: ${description}` : `Description: ${description}`;
+}
+
+/** Pulls the first balanced JSON object out of a reply (models sometimes add words or a code fence). */
+export function extractJson(reply) {
+  const text = String(reply).replace(/```[a-z]*\n?/gi, "");
+  const start = text.indexOf("{");
+  if (start < 0) return "";
+  let depth = 0;
+  let inString = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (c === "\\") i++;
+      else if (c === '"') inString = false;
+    } else if (c === '"') inString = true;
+    else if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return text.slice(start, i + 1);
+  }
+  return "";
+}

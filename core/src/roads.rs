@@ -93,8 +93,21 @@ impl Spec {
         Ok(parsed.notes)
     }
 
+    /// The stored description of junction `id`, as JSON.
+    pub fn junction_value(&self, id: &str) -> Option<Value> {
+        self.raw["junctions"].get(id).filter(|v| v.is_object()).cloned()
+    }
+
+    /// Stores a junction description (already checked).
+    pub fn set_junction(&mut self, id: &str, spec: &crate::junction::JunctionSpec) {
+        if !self.raw["junctions"].is_object() {
+            self.raw["junctions"] = json!({});
+        }
+        self.raw["junctions"][id] = spec.to_json();
+    }
+
     /// The cross-section and anchor for a segment, falling back to the default.
-    fn for_segment(&self, id: &str) -> (Parsed, Anchor, Option<String>) {
+    pub(crate) fn for_segment(&self, id: &str) -> (Parsed, Anchor, Option<String>) {
         let (text, anchor) = self.segments.get(id).cloned().unwrap_or((DEFAULT_CROSS_SECTION.to_string(), Anchor::Auto));
         match parse(&text, &self.library) {
             Ok(p) => (p, anchor, None),
@@ -111,9 +124,9 @@ struct Style {
     double: Option<f64>,
 }
 
-const WHITE: [f64; 3] = [0.98, 0.98, 0.98];
+pub(crate) const WHITE: [f64; 3] = [0.98, 0.98, 0.98];
 const YELLOW: [f64; 3] = [0.92, 0.72, 0.05];
-const CURB: [f64; 3] = [0.25, 0.25, 0.25];
+pub(crate) const CURB: [f64; 3] = [0.25, 0.25, 0.25];
 
 fn solid(rgb: [f64; 3], width: f64) -> Option<Style> {
     Some(Style { rgb, width, dash: None, double: None })
@@ -148,7 +161,7 @@ fn boundary(a: &Placed, b: &Placed) -> Option<Style> {
     }
 }
 
-fn heading(path: &[P]) -> P {
+pub(crate) fn heading(path: &[P]) -> P {
     path.windows(2)
         .find_map(|w| {
             let d = [w[1][0] - w[0][0], w[1][1] - w[0][1]];
@@ -159,8 +172,43 @@ fn heading(path: &[P]) -> P {
 }
 
 /// Document points are y-down; the geometry works y-up. Flipping y converts either way.
-fn flip(p: P) -> P {
+pub(crate) fn flip(p: P) -> P {
     [p[0], -p[1]]
+}
+
+/// Draws one road piece: a filled strip per placed element and a painted line at every boundary, following `path` (world metres,
+/// y up) with the elements laid out by `layout`. Shared by roads, junction legs and junction connectors.
+pub(crate) fn emit(out: &mut Out, base: &str, path: &[P], placed: &[Placed]) {
+    let mut bounds: Vec<f64> = placed.iter().map(|e| e.left).collect();
+    bounds.push(placed.last().map_or(0.0, |e| e.right));
+    let edges: Vec<Vec<P>> = bounds.iter().map(|&o| simplify(&offset_polyline(path, o, MITRE_LIMIT), 0.02)).collect();
+
+    for (i, e) in placed.iter().enumerate() {
+        if edges[i].len() < 2 || edges[i + 1].len() < 2 {
+            continue;
+        }
+        let mut ring = edges[i].clone();
+        ring.extend(edges[i + 1].iter().rev());
+        out.polygon(&format!("{base}.surface.{i}.{}", e.id), &ring, flip, e.fill);
+    }
+    for (k, edge) in edges.iter().enumerate() {
+        let style = match (k.checked_sub(1).map(|j| &placed[j]), placed.get(k)) {
+            (Some(a), Some(b)) => boundary(a, b),
+            _ => solid(CURB, 0.15), // the outer edge of the whole road
+        };
+        let Some(style) = style else { continue };
+        let lines: Vec<Vec<P>> = match style.double {
+            Some(gap) => [gap / 2.0, -gap / 2.0].iter().map(|&o| simplify(&offset_polyline(edge, o, MITRE_LIMIT), 0.02)).collect(),
+            None => vec![edge.clone()],
+        };
+        let lines: Vec<Vec<P>> = match style.dash {
+            Some((on, off)) => lines.iter().flat_map(|l| dash_polyline(l, on, off)).collect(),
+            None => lines,
+        };
+        if lines.iter().any(|l| l.len() >= 2) {
+            out.path(&format!("{base}.line.{k}"), &lines, flip, style.rgb, style.width, false);
+        }
+    }
 }
 
 /// Builds every `road.*` line in `items`. Returns notes for the user (things guessed or skipped).
@@ -194,36 +242,7 @@ pub fn build(items: &[Item], spec: &Spec, out: &mut Out) -> Vec<String> {
         let piece = pieces.entry(id.clone()).and_modify(|n| *n += 1).or_insert(1);
         let base = format!("gen.road.{id}.{piece}");
 
-        let mut bounds: Vec<f64> = placed.iter().map(|e| e.left).collect();
-        bounds.push(placed.last().map_or(0.0, |e| e.right));
-        let edges: Vec<Vec<P>> = bounds.iter().map(|&o| simplify(&offset_polyline(&path, o, MITRE_LIMIT), 0.02)).collect();
-
-        for (i, e) in placed.iter().enumerate() {
-            if edges[i].len() < 2 || edges[i + 1].len() < 2 {
-                continue;
-            }
-            let mut ring = edges[i].clone();
-            ring.extend(edges[i + 1].iter().rev());
-            out.polygon(&format!("{base}.surface.{i}.{}", e.id), &ring, flip, e.fill);
-        }
-        for (k, edge) in edges.iter().enumerate() {
-            let style = match (k.checked_sub(1).map(|j| &placed[j]), placed.get(k)) {
-                (Some(a), Some(b)) => boundary(a, b),
-                _ => solid(CURB, 0.15), // the outer edge of the whole road
-            };
-            let Some(style) = style else { continue };
-            let lines: Vec<Vec<P>> = match style.double {
-                Some(gap) => [gap / 2.0, -gap / 2.0].iter().map(|&o| simplify(&offset_polyline(edge, o, MITRE_LIMIT), 0.02)).collect(),
-                None => vec![edge.clone()],
-            };
-            let lines: Vec<Vec<P>> = match style.dash {
-                Some((on, off)) => lines.iter().flat_map(|l| dash_polyline(l, on, off)).collect(),
-                None => lines,
-            };
-            if lines.iter().any(|l| l.len() >= 2) {
-                out.path(&format!("{base}.line.{k}"), &lines, flip, style.rgb, style.width, false);
-            }
-        }
+        emit(out, &base, &path, &placed);
         let _ = Dir::Fwd; // directions are resolved in the layout; arrows come with the junction work
     }
     notes

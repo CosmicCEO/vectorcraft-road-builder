@@ -1,7 +1,7 @@
 // A stand-in for VectorCraft's control port: just enough of the protocol for the panel, and it records every command it is sent.
 import { writeFileSync } from "node:fs";
 import net from "node:net";
-import { PLUGIN_ID, SET_CROSS_SECTION } from "../lib/doc.mjs";
+import { PLUGIN_ID, SET_CROSS_SECTION, SET_JUNCTION } from "../lib/doc.mjs";
 
 export async function fakeVectorCraft({ paths = [], selection = [], spec = { segments: {} }, hasDocument = true } = {}) {
   const doc = { paths: paths.map((p) => ({ kind: "Path", ...p })), selection: [...selection], spec: structuredClone(spec), revision: 1, calls: [] };
@@ -37,6 +37,17 @@ export async function fakeVectorCraft({ paths = [], selection = [], spec = { seg
               x.name = `road.${seg}`;
             }
             doc.spec.segments[seg] = { cross_section: args.cross_section, anchor: "auto" };
+          }
+          doc.revision++;
+        } else if (command === SET_JUNCTION) {
+          doc.spec.junctions ??= {};
+          for (const x of doc.paths.filter((q) => doc.selection.includes(q.id))) {
+            let id = x.name.startsWith("junction.") ? x.name.slice(9) : null;
+            if (!id) {
+              id = `j${Object.keys(doc.spec.junctions).length + 1}`;
+              x.name = `junction.${id}`;
+            }
+            doc.spec.junctions[id] = JSON.parse(p.params.description);
           }
           doc.revision++;
         } else if (command === "file.saveCopy") {

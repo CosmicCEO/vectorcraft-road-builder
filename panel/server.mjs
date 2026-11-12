@@ -45,6 +45,9 @@ export function createServer({ panel, port }) {
     text: (b) => panel.setText(String(b.text ?? "").slice(0, 1000)),
     draw: (b) => panel.draw({ scope: b.scope }),
     cancel: () => panel.cancel(),
+    mode: (b) => panel.setMode(String(b.mode)),
+    match: () => panel.match(),
+    junction: (b) => panel.editJunction(b.patch ?? {}),
     agent: (b) => panel.setAgent(String(b.id)),
   };
 

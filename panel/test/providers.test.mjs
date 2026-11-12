@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { library } from "../lib/cli.mjs";
-import { extractLine, systemPrompt, userPrompt } from "../lib/prompt.mjs";
-import { ask, loadProviders, propose } from "../lib/providers.mjs";
+import { extractJson, extractLine, junctionSystemPrompt, junctionUserPrompt, systemPrompt, userPrompt } from "../lib/prompt.mjs";
+import { ask, loadProviders, propose, proposeJunction } from "../lib/providers.mjs";
 
 const STORY = "facing N: bike-lane | apron | lane S x2 | margin 3 | lane N x2 | apron | bike-lane";
 const fake = (...replies) => {
@@ -110,4 +110,31 @@ test("the user's providers file adds to the built-in ones", () => {
   const cfg = loadProviders(mine);
   assert.equal(cfg.default, "local");
   assert.ok(cfg.providers.claude && cfg.providers.local, "built-in and user providers are both there");
+});
+
+const FOUR_WAY = '{"legs": [{"side": "west", "cross_section": "lane fwd | lane back"}, {"side": "east", "cross_section": "lane fwd | lane back"}], "control": "signal", "crosswalks": true}';
+
+test("JSON is found inside whatever else the model said", () => {
+  assert.equal(extractJson('Here:\n```json\n{"a": {"b": "}"}, "c": 1}\n```\nDone'), '{"a": {"b": "}"}, "c": 1}');
+  assert.equal(extractJson("no braces here"), "");
+  assert.equal(extractJson('{"unfinished": '), "");
+});
+
+test("the junction prompt carries the schema, the elements and an example", async () => {
+  const p = junctionSystemPrompt(await library());
+  for (const w of ["legs", "control", "crosswalks", "radius", "traffic lights", "lane fwd | lane back", "turn-pocket"]) assert.ok(p.includes(w), w);
+  assert.match(junctionUserPrompt({ description: "add a crosswalk", current: { legs: [] } }), /Current junction:\n\{"legs":\[\]\}/);
+});
+
+test("a junction description is validated, and an invalid one is sent back once", async () => {
+  const p = fake('{"control": "roundabout"}', `Here you go: ${FOUR_WAY}`);
+  const r = await proposeJunction({ description: "four way with lights", provider: p });
+  assert.equal(r.ok, true);
+  assert.equal(r.junction.kind, "cross");
+  assert.match(r.summary, /four-way junction, traffic signals, crosswalks/);
+  assert.equal(r.attempts.length, 2);
+  assert.match(p.seen[1], /rejected: control must be/);
+  const bad = await proposeJunction({ description: "x", provider: fake("I cannot do that") });
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /could not produce a valid junction/);
 });

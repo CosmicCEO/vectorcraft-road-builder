@@ -159,3 +159,29 @@ fn removing_a_side_element_does_not_move_the_median_off_the_line() {
     assert!((both.0 - without_west_bike_lane.0).abs() < 1e-9 && (both.1 - without_west_bike_lane.1).abs() < 1e-9, "{both:?} vs {without_west_bike_lane:?}");
     assert!((both.0 - 98.5).abs() < 1e-9 && (both.1 - 101.5).abs() < 1e-9, "the 3 m margin straddles the drawn line: {both:?}");
 }
+
+#[test]
+fn a_junction_line_is_built_and_described_through_the_commands() {
+    use road_builder_core::builder::set_junction_text;
+    // A road piece on each side of a connecting plain line.
+    let objs = vec![line(1, "road.a", &[[200.0, 700.0], [200.0, 420.0]]), line(2, "road.b", &[[200.0, 300.0], [200.0, 20.0]]), line(3, "", &[[200.0, 420.0], [200.0, 300.0]])];
+    let desc = json!({"legs": [{"side": "west", "cross_section": "lane fwd | lane back"}, {"side": "east", "cross_section": "lane fwd | lane back"}], "control": "signal", "crosswalks": true}).to_string();
+    let data = json!({"segments": {"a": {"cross_section": STORY}, "b": {"cross_section": STORY}}});
+    let out: Value = serde_json::from_str(&set_junction_text(&json!({"objects": [objs[2].clone()]}), &json!({"description": desc, "_context": {"documentData": data}})).unwrap()).unwrap();
+    assert_eq!((out["objects"][0]["id"].as_i64(), out["objects"][0]["name"].as_str()), (Some(3), Some("junction.j1")), "the plain line becomes a junction");
+    assert_eq!(out["documentData"]["junctions"]["j1"]["kind"], "cross");
+    assert_eq!(out["documentData"]["segments"]["a"]["cross_section"], STORY, "other stored data is kept");
+
+    // Build everything: roads, then the junction on top.
+    let objs = vec![objs[0].clone(), objs[1].clone(), line(3, "junction.j1", &[[200.0, 420.0], [200.0, 300.0]])];
+    let built = build(&json!({"objects": objs}), &params(out["documentData"].clone())).unwrap();
+    assert!(names(&built, "gen.junction.j1.box").len() == 1 && names(&built, "gen.junction.j1.leg.").len() >= 4, "{:?}", names(&built, "gen.junction"));
+    assert_eq!(names(&built, "gen.road.a.1.surface.").len(), 9, "the roads on either side are still built");
+
+    // Bad descriptions come back as plain sentences.
+    let plain = json!({"objects": [line(3, "", &[[0.0, 1.0], [0.0, 0.0]])]});
+    let bad = |d: &str| set_junction_text(&plain, &json!({"description": d, "_context": {}})).unwrap_err();
+    assert!(bad("{not json").contains("not valid JSON"));
+    assert!(bad(r#"{"control": "roundabout"}"#).contains("control must be"));
+    assert!(set_junction_text(&json!({"objects": []}), &json!({"description": "{}", "_context": {}})).unwrap_err().contains("Select the connecting line"));
+}

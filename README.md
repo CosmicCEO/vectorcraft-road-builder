@@ -46,6 +46,19 @@ inside trimmed).
 - Not built yet: junctions between described roads, turn pockets that start and end part-way along a road, lane arrows, and the
   companion panel. See `docs/DESIGN.md`.
 
+## Junctions (new in 0.3)
+
+Draw a short line between two road pieces (the gap), select it, and in the panel choose **A connection between two roads**. Either press
+**Connect and match** (the road is simply carried across the gap) or describe a junction in words:
+
+> This is a 4 way intersection. The west leg is a two lane rural road, the east is a two lane rural road. There are traffic lights and crosswalks.
+
+The road runs straight through. The legs, the paved box where they cross (the median is opened up), true-arc kerb corners, crosswalks, stop
+bars and signal heads or stop signs are drawn from the description. A junction is stored as small data (up to two legs, each with its own
+cross-section and length; control none, signal or stop; crosswalks; kerb radius) and the panel lets you adjust the control, the crosswalks
+and the legs before pressing Draw. In VectorCraft's menu the command is **Describe Junction**. Not built yet: turn pockets, curved legs,
+roundabouts and junctions that are not at right angles.
+
 ## The companion panel (new in 0.3)
 
 A small page beside VectorCraft where you describe roads in words and click them to see and change their elements:

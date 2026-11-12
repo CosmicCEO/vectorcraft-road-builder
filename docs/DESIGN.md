@@ -106,6 +106,17 @@ the last Ross-Bridge-specific names from the core. Junction templates, part-way 
 - Real-world snag found: macOS asks permission before one app may script another, so the panel never uses AppleScript.
 - Apple Intelligence and other agents (phase 3): the provider interface is in place; `apple-fm` needs the small Swift helper.
 
+## Phase 3 status (3a done: junctions; 3b turn pockets and 3c Apple Intelligence still to do)
+- `core/src/junction.rs`: junction description (legs, control, crosswalks, kerb radius) checked and stored in canonical form; geometry for a
+  connecting line: the road carries through, legs built from their own cross-sections, a paved box that opens the median, true-arc kerb corners,
+  crosswalks, stop bars, signal heads or stop signs. A tee keeps the far side's bike lane and kerb. Compass sides (west, east) resolve against the
+  direction the line is drawn. 8 native tests, plus one through the commands.
+- `Set Junction` command; `road-builder-cli parse-junction`; panel: a plain line is a road or a connection, Connect and match, junction card
+  with control, crosswalks and legs adjustable; the agent returns junction JSON, validated like a road. Real Claude read the owner's intersection
+  sentence correctly first time (four-way, west and east two-lane legs, signals, crosswalks).
+- Live: the whole intersection story replayed through the panel against the real app (`panel/demo/junction-demo.mjs`, video of 8 steps).
+- Honest limits: the owner's sentence also mentions a turn pocket; the junction prompt tells the agent to leave that out until 3b exists.
+
 ## Verification at each phase
 Native unit tests for the core; the real VectorCraft engine via `scripts/roundtrip.sh` and the MCP loop (`scripts/mcp-smoke.mjs`);
 a visual check by screenshot against the story, step by step.

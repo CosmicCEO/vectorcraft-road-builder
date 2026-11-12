@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { Control } from "../lib/control.mjs";
-import { SET_CROSS_SECTION, PLUGIN_ID } from "../lib/doc.mjs";
+import { SET_CROSS_SECTION, SET_JUNCTION, PLUGIN_ID } from "../lib/doc.mjs";
 import { Panel } from "../lib/panel.mjs";
 import { fakeVectorCraft } from "./fake-vectorcraft.mjs";
 
@@ -122,5 +122,67 @@ test("typing the shorthand directly is validated like an agent's answer", async 
   await panel.setText("squishy margin 3 | lane");
   assert.equal(panel.snapshot().pending.canonical, "margin 3 | lane");
   assert.match(panel.snapshot().message, /Read as/);
+  done();
+});
+
+const FOUR_WAY = JSON.stringify({ legs: [{ side: "west", cross_section: "lane fwd | lane back", length: 40 }, { side: "east", cross_section: "lane fwd | lane back", length: 40 }], control: "signal", crosswalks: true, radius: 6 });
+
+test("a plain line can be a connection: describe the junction, then Draw", async () => {
+  const vc = await fakeVectorCraft({ paths: [{ id: 7, name: "" }], selection: [7] });
+  const { panel, done } = await setup(vc, `Sure: ${FOUR_WAY}`);
+  await panel.setMode("connection");
+  await panel.propose("This is a 4 way intersection. West and east are two lane rural roads. There are traffic lights and cross walks.", "fake");
+  const pending = panel.snapshot().pending;
+  assert.equal(pending.kind, "junction");
+  assert.match(pending.summary, /four-way junction, traffic signals, crosswalks/);
+  assert.equal(vc.doc.calls.length, 0, "nothing is applied until Draw");
+
+  await panel.draw();
+  const set = vc.doc.calls.find((c) => c.command === SET_JUNCTION);
+  assert.equal(JSON.parse(set.params.params.description).legs.length, 2);
+  assert.deepEqual(vc.doc.calls.filter((c) => c.command !== "file.saveCopy").map((c) => c.command), ["select.set", SET_JUNCTION, "select.all", "plugin.run", "select.set"]);
+  assert.deepEqual(vc.doc.selection, [7]);
+  const after = panel.snapshot();
+  assert.equal(after.target.kind, "junction");
+  assert.equal(after.junction.spec.control, "signal");
+  assert.match(after.junction.summary, /four-way junction/);
+  done();
+});
+
+test("Connect and match carries the road across with no side roads", async () => {
+  const vc = await fakeVectorCraft({ paths: [{ id: 7, name: "" }], selection: [7] });
+  const { panel, done } = await setup(vc);
+  await panel.setMode("connection");
+  await panel.match();
+  assert.match(panel.snapshot().pending.summary, /road carried across the gap/);
+  await panel.draw();
+  assert.deepEqual(JSON.parse(vc.doc.calls.find((c) => c.command === SET_JUNCTION).params.params.description).legs, []);
+  done();
+});
+
+test("a selected junction shows its description and its settings can be changed before drawing", async () => {
+  const vc = await fakeVectorCraft({ paths: [{ id: 7, name: "junction.j1" }], selection: [7], spec: { segments: {}, junctions: { j1: JSON.parse(FOUR_WAY) } } });
+  const { panel, done } = await setup(vc);
+  let s = panel.snapshot();
+  assert.equal(s.target.kind, "junction");
+  assert.equal(s.junction.spec.legs.length, 2);
+  await panel.editJunction({ control: "stop", crosswalks: false });
+  s = panel.snapshot();
+  assert.equal(s.pending.junction.control, "stop");
+  assert.match(s.pending.summary, /stop signs on the legs/);
+  await panel.editJunction({ removeLeg: 1 });
+  assert.match(panel.snapshot().pending.summary, /T-junction/, "removing a leg makes it a T-junction");
+  assert.equal(vc.doc.spec.junctions.j1.control, "signal", "still not applied");
+  done();
+});
+
+test("an agent's invalid junction never reaches VectorCraft", async () => {
+  const vc = await fakeVectorCraft({ paths: [{ id: 7, name: "" }], selection: [7] });
+  const { panel, done } = await setup(vc, '{"control": "roundabout"}');
+  await panel.setMode("connection");
+  await panel.propose("a roundabout", "fake");
+  assert.equal(panel.snapshot().pending, null);
+  assert.match(panel.snapshot().message, /could not produce a valid junction/);
+  assert.equal(vc.doc.calls.length, 0);
   done();
 });

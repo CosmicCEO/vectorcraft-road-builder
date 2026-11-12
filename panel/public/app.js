@@ -64,30 +64,60 @@ function show(s) {
   if (document.activeElement !== agents) agents.value = s.agents.default;
 
   const t = s.target;
+  const pj = s.pending?.kind === "junction" ? s.pending : null; // a proposed junction
   const ctx = $("context");
   ctx.replaceChildren();
   if (!s.doc) ctx.append(el("p", { className: "muted" }, "Waiting for VectorCraft…"));
   else if (!t) ctx.append(el("strong", {}, "Nothing selected"), el("p", { className: "muted" }, "Draw a line in VectorCraft and select it, or select a road, then describe it here."));
-  else if (t.kind === "line") ctx.append(el("strong", {}, "A plain line is selected"), el("p", { className: "muted" }, "Describe it below to turn it into a road."));
+  else if (t.kind === "line") ctx.append(el("strong", {}, "A plain line is selected"), el("p", { className: "muted" }, s.mode === "connection" ? "Describe the junction below, or just carry the road across." : "Describe it below to turn it into a road."));
   else if (t.kind === "road") ctx.append(el("strong", {}, `Road ${s.road.segment}`), el("p", { className: "muted" }, s.road.described ? `${s.road.pieces.selected} of ${s.road.pieces.total} piece${s.road.pieces.total === 1 ? "" : "s"} selected` : "No description yet (drawn as two lanes)"));
+  else if (t.kind === "junction") ctx.append(el("strong", {}, `Junction ${s.junction.id}`), el("p", { className: "muted" }, s.junction.described ? "A connecting line with a description" : "A connecting line, not described yet"));
   else ctx.append(el("strong", {}, "Select one line or one road"), el("p", { className: "muted" }, "The selection holds something this panel does not describe."));
 
-  $("road").hidden = !s.road;
-  if (s.road) drawItems($("items"), $("bar"), $("total"), s.road, !s.pending);
+  // A plain line can be a road or a connection between two roads.
+  $("modeCard").hidden = t?.kind !== "line";
+  for (const r of document.querySelectorAll("input[name=mode]")) r.checked = r.value === s.mode;
+  $("matchRow").hidden = s.mode !== "connection";
 
-  $("proposal").hidden = !s.pending;
-  $("asked").textContent = s.pending?.description ? `You asked: “${s.pending.description}”` : "";
-  $("asked").hidden = !s.pending?.description;
-  if (s.pending) {
-    drawItems($("pitems"), $("pbar"), $("ptotal"), s.pending, true);
-    $("shorthand").value = s.pending.canonical;
+  // Junction card: the proposed junction, or the selected junction's description.
+  const jv = pj ? { spec: pj.junction, summary: pj.summary, proposed: true } : t?.kind === "junction" && s.junction ? { spec: s.junction.spec, summary: s.junction.summary } : null;
+  $("junctionCard").hidden = !jv;
+  if (jv) {
+    $("jtitle").textContent = jv.proposed ? "Proposed junction" : `Junction ${s.junction.id}`;
+    $("jasked").textContent = pj?.description ? `You asked: “${pj.description}”` : "";
+    $("jasked").hidden = !pj?.description;
+    $("jsummary").textContent = jv.summary;
+    const legs = $("jlegs");
+    legs.replaceChildren();
+    jv.spec.legs.forEach((l, i) => {
+      const rm = el("button", { className: "plain tiny", title: "Remove this leg" }, "✕");
+      rm.onclick = () => act("junction", { patch: { removeLeg: i } });
+      legs.append(el("li", { className: "legrow" }, el("span", { className: "name" }, `${l.side} leg`), el("code", {}, `${l.cross_section} · ${l.length} m`), rm));
+    });
+    $("jcontrol").value = jv.spec.control;
+    $("jcross").checked = !!jv.spec.crosswalks;
+    $("jcancel").hidden = !jv.proposed;
+  }
+
+  $("road").hidden = !s.road || !!pj;
+  if (s.road && !pj) drawItems($("items"), $("bar"), $("total"), s.road, !s.pending);
+
+  const pr = s.pending && !pj ? s.pending : null; // a proposed road
+  $("proposal").hidden = !pr;
+  $("asked").textContent = pr?.description ? `You asked: “${pr.description}”` : "";
+  $("asked").hidden = !pr?.description;
+  if (pr) {
+    drawItems($("pitems"), $("pbar"), $("ptotal"), pr, true);
+    $("shorthand").value = pr.canonical;
   } else if (s.road && document.activeElement !== $("shorthand")) $("shorthand").value = s.road.text;
 
   const scope = $("scope");
-  const multi = s.road && s.road.pieces.total > s.road.pieces.selected;
+  const multi = s.road && !pj && s.road.pieces.total > s.road.pieces.selected;
   scope.hidden = !multi;
   if (multi) $("scope-all").textContent = `All ${s.road.pieces.total} pieces of this road`;
 
+  const junctionish = t?.kind === "junction" || (t?.kind === "line" && s.mode === "connection");
+  $("wordsLabel").textContent = junctionish ? "Describe the junction, or the change you want" : "Describe the road, or the change you want";
   const canAct = !!t && t.kind !== "other" && !s.busy;
   $("propose").disabled = !canAct || !$("words").value.trim();
   $("draw").disabled = !canAct;
@@ -103,6 +133,11 @@ $("words").oninput = () => state && show(state);
 $("words").onkeydown = (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !$("propose").disabled) $("propose").click(); };
 $("draw").onclick = () => act("draw", { scope: document.querySelector("input[name=scope]:checked")?.value });
 $("cancel").onclick = () => act("cancel");
+$("jcancel").onclick = () => act("cancel");
+$("match").onclick = () => act("match");
+for (const r of document.querySelectorAll("input[name=mode]")) r.onchange = () => act("mode", { mode: r.value });
+$("jcontrol").onchange = () => act("junction", { patch: { control: $("jcontrol").value } });
+$("jcross").onchange = () => act("junction", { patch: { crosswalks: $("jcross").checked } });
 $("use").onclick = () => act("text", { text: $("shorthand").value });
 $("agent").onchange = () => act("agent", { id: $("agent").value });
 

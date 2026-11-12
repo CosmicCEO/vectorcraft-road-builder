@@ -8,6 +8,7 @@
 //! `parse` and `edit` print `{"ok": true, "canonical", "facing", "items": [...], "total_width", "notes"}` or `{"ok": false, "error"}`.
 
 use road_builder_core::crosssection::{Parsed, format, parse};
+use road_builder_core::junction::{Control, JunctionSpec};
 use road_builder_core::library::Library;
 use serde_json::{Value, json};
 
@@ -71,6 +72,19 @@ fn run(args: &[String], lib: &Library) -> Value {
             };
             done.map_or_else(fail, |()| describe(&p, lib))
         }
+        Some("parse-junction") => {
+            let Some(text) = args.get(1) else { return fail("usage: parse-junction '<junction JSON>'") };
+            let value: Value = match serde_json::from_str(text) {
+                Ok(v) => v,
+                Err(e) => return fail(format!("not valid JSON: {e}")),
+            };
+            JunctionSpec::from_json(&value, lib).map_or_else(fail, |j| {
+                let legs: Vec<String> = j.legs.iter().map(|l| format!("{}: {} ({} m)", l.side, l.cross_section, l.length)).collect();
+                let control = match j.control { Control::None => "no control", Control::Signal => "traffic signals", Control::Stop => "stop signs on the legs" };
+                let summary = format!("{}, {control}{}{}", match j.kind() { "tee" => "T-junction", "cross" => "four-way junction", _ => "road carried across the gap" }, if j.crosswalks { ", crosswalks" } else { "" }, if legs.is_empty() { String::new() } else { format!("; legs {}", legs.join("; ")) });
+                json!({"ok": true, "junction": j.to_json(), "summary": summary})
+            })
+        }
         Some("library") => {
             let els: Vec<Value> = lib
                 .names()
@@ -80,7 +94,7 @@ fn run(args: &[String], lib: &Library) -> Value {
                 .collect();
             json!({"ok": true, "elements": els})
         }
-        _ => fail("usage: road-builder-cli parse|edit|library ..."),
+        _ => fail("usage: road-builder-cli parse|edit|parse-junction|library ..."),
     }
 }
 

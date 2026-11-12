@@ -3,6 +3,7 @@
 
 use crate::geom::{P, Poly, add, scale};
 use crate::output::Out;
+use crate::junction::{self, JunctionSpec, junction_id};
 use crate::roads::{self, Spec, anchor_from, segment_id};
 use crate::scene::{Scene, is_junction_name};
 use crate::vcdoc::{Item, items_from_filter_input};
@@ -121,7 +122,7 @@ fn side_edge(sc: &Scene, side: f64, s: f64) -> f64 {
 pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
     let items = items_from_filter_input(input);
     let spec = Spec::from_document_data(&params["_context"]["documentData"]);
-    let has_road = items.iter().any(|i| segment_id(&i.name).is_some());
+    let has_road = items.iter().any(|i| segment_id(&i.name).is_some() || junction_id(&i.name).is_some());
     let has_legacy = items.iter().any(|i| i.name == "centerline");
     if !has_road && !has_legacy {
         return Err("Nothing to build. Draw a line and name it road.<id> (or open a pmap that has a centerline), then Select All so the road is included.".into());
@@ -135,6 +136,7 @@ pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
     }
     if has_road {
         roads::build(&items, &spec, &mut out);
+        junction::build(&items, &spec, &mut out); // junctions are drawn over the roads they join
     }
     if has_legacy {
         build_legacy(&mut out, &items, params)?;
@@ -223,7 +225,7 @@ pub fn add_junction_text(input: &Value, params: &Value) -> Result<String, String
 
 /// Names that already mean something else, so a plain line must not be mistaken for them.
 fn is_reserved_name(name: &str) -> bool {
-    name == "centerline" || ["gen.", "profile.", "flag.", "arrow."].iter().any(|p| name.starts_with(p)) || is_junction_name(name)
+    name == "centerline" || ["gen.", "profile.", "flag.", "arrow."].iter().any(|p| name.starts_with(p)) || is_junction_name(name) || junction_id(name).is_some()
 }
 
 /// Command "Set Cross-section": stores the road's cross-section (see `crosssection`) in the document's plug-in data. Applies to the
@@ -285,6 +287,46 @@ pub fn set_cross_section_text(input: &Value, params: &Value) -> Result<String, S
             match renames.iter().find(|r| r.0 == id) {
                 Some((_, name)) => out.rename(id, name),
                 None => out.keep(id),
+            }
+        }
+    }
+    Ok(out.finish_with(Some(&spec.to_value())))
+}
+
+/// Command "Set Junction": stores a junction description (see `junction`) in the document's plug-in data. Applies to the selected
+/// `junction.*` line, or to the one selected plain line, which is renamed `junction.<id>`; `junction` names the id explicitly.
+pub fn set_junction_text(input: &Value, params: &Value) -> Result<String, String> {
+    let items = items_from_filter_input(input);
+    let mut spec = Spec::from_document_data(&params["_context"]["documentData"]);
+    let raw = params["description"].as_str().map(str::trim).filter(|t| !t.is_empty()).ok_or("Give the junction description (JSON), for example {\"legs\": [{\"side\": \"left\", \"cross_section\": \"lane fwd | lane back\"}], \"control\": \"signal\", \"crosswalks\": true}")?;
+    let value: Value = serde_json::from_str(raw).map_err(|e| format!("the junction description is not valid JSON: {e}"))?;
+    let js = JunctionSpec::from_json(&value, &spec.library)?;
+    let clean = |t: &str| t.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(16).collect::<String>();
+
+    let mut renames: Vec<(i64, String)> = Vec::new();
+    let id = if let Some(id) = params["junction"].as_str().map(clean).filter(|s| !s.is_empty()) {
+        id
+    } else if let Some(id) = items.iter().find_map(|i| junction_id(&i.name)) {
+        id
+    } else {
+        let plain: Vec<&Item> = items.iter().filter(|i| i.id.is_some() && !i.subs.is_empty() && !is_reserved_name(&i.name) && segment_id(&i.name).is_none()).collect();
+        match plain.as_slice() {
+            [] => return Err("Select the connecting line to describe (or give its junction id).".into()),
+            [one] => {
+                let id = (1..).map(|n| format!("j{n}")).find(|id| spec.junction_value(id).is_none()).unwrap_or_default();
+                renames.push((one.id.unwrap_or_default(), format!("junction.{id}")));
+                id
+            }
+            _ => return Err("More than one line is selected: select the one connecting line to describe.".into()),
+        }
+    };
+    spec.set_junction(&id, &js);
+    let mut out = Out::new();
+    for it in &items {
+        if let Some(iid) = it.id {
+            match renames.iter().find(|r| r.0 == iid) {
+                Some((_, name)) => out.rename(iid, name),
+                None => out.keep(iid),
             }
         }
     }

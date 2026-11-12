@@ -45,3 +45,7 @@ summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 details input { margin: 8px 0 6px; }
 
 .asked { margin: 0 0 8px; font-style: italic; }
+.mode { display: grid; gap: 4px; font-size: 14px; }
+.row.wrap { flex-wrap: wrap; gap: 14px; font-size: 14px; }
+.legrow { align-items: baseline; }
+.legrow code { font-size: 12px; color: var(--muted); }

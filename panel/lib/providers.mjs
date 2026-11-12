@@ -4,8 +4,8 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { library, parseCrossSection } from "./cli.mjs";
-import { extractLine, systemPrompt, userPrompt } from "./prompt.mjs";
+import { library, parseCrossSection, parseJunction } from "./cli.mjs";
+import { extractJson, extractLine, junctionSystemPrompt, junctionUserPrompt, systemPrompt, userPrompt } from "./prompt.mjs";
 
 const here = import.meta.dirname;
 
@@ -105,4 +105,30 @@ export async function propose({ description, current = null, provider, maxAttemp
     user = `${userPrompt(request)}\n\nYour previous answer was: ${line}\nIt was rejected: ${parsed.error}\nReply again with a corrected single line.`;
   }
   return { ok: false, error: `the agent could not produce a valid cross-section: ${attempts.at(-1)?.error}`, attempts };
+}
+
+/**
+ * Turns a description of a junction into a validated junction (legs, control, crosswalks), the same way `propose` does for a road.
+ * `current` is the junction's present description (an object) when editing. Returns {ok: true, junction, summary, attempts} or {ok: false, error, attempts}.
+ */
+export async function proposeJunction({ description, current = null, provider, maxAttempts = 2, lib }) {
+  lib ??= await library();
+  const system = junctionSystemPrompt(lib);
+  const request = { description, current, kind: "junction" };
+  let user = junctionUserPrompt(request);
+  const attempts = [];
+  for (let n = 1; n <= maxAttempts; n++) {
+    let reply;
+    try {
+      reply = await ask(provider, { system, user, request });
+    } catch (e) {
+      return { ok: false, error: e.message, attempts };
+    }
+    const json = extractJson(reply);
+    const parsed = json ? await parseJunction(json) : { ok: false, error: "the answer had no JSON object in it" };
+    attempts.push({ reply: String(reply).slice(0, 600), json, ok: parsed.ok, error: parsed.error });
+    if (parsed.ok) return { ...parsed, attempts };
+    user = `${junctionUserPrompt(request)}\n\nYour previous answer was: ${json || String(reply).slice(0, 300)}\nIt was rejected: ${parsed.error}\nReply again with a corrected JSON object only.`;
+  }
+  return { ok: false, error: `the agent could not produce a valid junction: ${attempts.at(-1)?.error}`, attempts };
 }

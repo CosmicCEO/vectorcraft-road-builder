@@ -6,12 +6,20 @@ import { gunzipSync } from "node:zlib";
 
 export const PLUGIN_ID = "com.cosmicceo.roadbuilder.build";
 export const SET_CROSS_SECTION = `plugin.${PLUGIN_ID}.set_cross_section`;
+export const SET_JUNCTION = `plugin.${PLUGIN_ID}.set_junction`;
 
 /** The segment id of a road line (`road.a` is `a`, plain `road` is `main`), or null. Mirrors core/src/roads.rs. */
 export function segmentId(name = "") {
   if (name === "road") return "main";
   if (!name.startsWith("road.")) return null;
   return name.slice(5).split(".")[0] || "main";
+}
+
+/** The id of a junction line (`junction.x` is `x`, plain `junction` is `main`), or null. Mirrors core/src/junction.rs. */
+export function junctionId(name = "") {
+  if (name === "junction") return "main";
+  if (!name.startsWith("junction.")) return null;
+  return name.slice(9).split(".")[0] || "main";
 }
 
 const OWN = /^(gen\.|profile\.|flag\.|arrow\.)|^centerline$|^[A-Z]\d+\./;
@@ -21,6 +29,8 @@ export function classify(node) {
   const isPath = node.kind === "Path";
   const segment = isPath ? segmentId(node.name) : null;
   if (segment) return { role: "road", segment };
+  const junction = isPath ? junctionId(node.name) : null;
+  if (junction) return { role: "junction", segment: junction };
   if (isPath && !OWN.test(node.name ?? "")) return { role: "line", segment: null };
   return { role: "other", segment: null };
 }
