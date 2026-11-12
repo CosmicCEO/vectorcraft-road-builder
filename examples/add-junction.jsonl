@@ -1,0 +1,4 @@
+{"command": "select.all"}
+{"command": "plugin.com.cosmicceo.roadbuilder.build.add_junction", "params": {"params": {"s": 500, "kind": "tee", "side": "left", "label": "Test Street"}}}
+{"command": "select.all"}
+{"command": "plugin.run", "params": {"id": "com.cosmicceo.roadbuilder.build"}}

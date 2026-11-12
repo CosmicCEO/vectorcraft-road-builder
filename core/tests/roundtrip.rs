@@ -90,3 +90,35 @@ fn base64_matches_known_values() {
     assert_eq!(export::base64(b"foo"), "Zm9v");
     assert_eq!(export::base64(b"foobar"), "Zm9vYmFy");
 }
+
+fn with_ids(objects: &Value) -> Value {
+    let mut input: Vec<Value> = objects["objects"].as_array().unwrap().clone();
+    for (i, o) in input.iter_mut().enumerate() {
+        o["id"] = json!(i + 1);
+    }
+    json!({"objects": input})
+}
+
+#[test]
+fn add_junction_places_a_marker_the_exporter_reads_back() {
+    let objects = pmap::import(SAMPLE.as_bytes()).unwrap();
+    let params = json!({"s": 250.0, "kind": "tee", "side": "left", "label": "Test Street"});
+    let out = builder::add_junction_text(&with_ids(&objects), &params).unwrap();
+    let out: Value = serde_json::from_str(&out).unwrap();
+    let new: Vec<Value> = out["objects"].as_array().unwrap().iter().filter(|o| o.get("path").is_some()).cloned().collect();
+    assert_eq!(new.len(), 1);
+    assert_eq!(new[0]["name"], "J3.tee.left.Test-Street", "next free id after J1 and J2");
+    let mut all = objects["objects"].as_array().unwrap().clone();
+    all.extend(new);
+    let (text, _) = export::export(&native(&json!({"objects": all}))).unwrap();
+    let j = parse(&text)["junctions"].as_array().unwrap().iter().find(|j| j["id"] == "J3").cloned().unwrap();
+    assert!((j["s"].as_f64().unwrap() - 250.0).abs() < 0.01, "{j}");
+    assert_eq!(j["side"], "left");
+}
+
+#[test]
+fn add_junction_refuses_a_spot_off_the_road() {
+    let objects = pmap::import(SAMPLE.as_bytes()).unwrap();
+    let err = builder::add_junction_text(&with_ids(&objects), &json!({"s": 9999.0})).unwrap_err();
+    assert!(err.contains("off the road"), "{err}");
+}

@@ -10,4 +10,4 @@ CLI="${3:-${VECTORCRAFT_CLI:-vectorcraft-cli}}"
 cd "$(dirname "$0")/.."
 "$CLI" run --in "$IN" --commands examples/build.jsonl \
   --export "$OUT/built.vectorcraft" --export "$OUT/built.svg" --export "$OUT/built.pmap" | cut -c1-200
-node ../../scripts/pmap-check.mjs "$IN" "$OUT/built.pmap"
+node scripts/pmap-diff.mjs "$IN" "$OUT/built.pmap"

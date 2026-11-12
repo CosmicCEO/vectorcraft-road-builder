@@ -140,7 +140,7 @@ impl Out {
     }
 
     /// A new stroked path object; `map` converts each world point to a document point.
-    fn path(&mut self, name: &str, subs: &[Vec<P>], map: impl Fn(P) -> P, rgb: [f64; 3], width: f64) {
+    fn path(&mut self, name: &str, subs: &[Vec<P>], map: impl Fn(P) -> P, rgb: [f64; 3], width: f64, closed: bool) {
         self.sep();
         self.text.push_str("{\"name\":");
         self.text.push_str(&serde_json::to_string(name).unwrap_or_default());
@@ -161,7 +161,7 @@ impl Out {
                 num(&mut self.text, p[1]);
                 self.text.push_str("]}");
             }
-            self.text.push_str("],\"closed\":false}");
+            self.text.push_str(if closed { "],\"closed\":true}" } else { "],\"closed\":false}" });
         }
         self.text.push_str("]},\"strokes\":[{\"paint\":{\"type\":\"solid\",\"color\":{\"model\":\"rgb\",\"r\":");
         num(&mut self.text, rgb[0]);
@@ -214,7 +214,7 @@ pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
     for (key, rgb, width, dash) in STYLE {
         let r = runs(&sc, key, dash);
         if !r.is_empty() {
-            out.path(&format!("{GEN_PREFIX}line.{key}"), &r, to_doc, rgb, width);
+            out.path(&format!("{GEN_PREFIX}line.{key}"), &r, to_doc, rgb, width, false);
         }
     }
 
@@ -233,10 +233,10 @@ pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
             let hw = stub_w / 2.0;
             let tag = if sides.len() > 1 { format!("{}{}", j.id, if side > 0.0 { "r" } else { "l" }) } else { j.id.clone() };
             let edges = vec![vec![along(0.0, -hw), along(stub_len, -hw)], vec![along(0.0, hw), along(stub_len, hw)]];
-            out.path(&format!("{GEN_PREFIX}stub.{tag}"), &edges, to_doc, [0.13, 0.13, 0.13], 0.3);
+            out.path(&format!("{GEN_PREFIX}stub.{tag}"), &edges, to_doc, [0.13, 0.13, 0.13], 0.3, false);
             let stripes: Vec<Vec<P>> = (0..5).map(|k| { let w = -hw + 0.8 + 1.6 * k as f64; vec![along(2.0, w), along(5.0, w)] }).collect();
-            out.path(&format!("{GEN_PREFIX}zebra.{tag}"), &stripes, to_doc, [0.9, 0.9, 0.9], 0.6);
-            out.path(&format!("{GEN_PREFIX}stop.{tag}"), &[vec![along(7.0, -hw), along(7.0, hw)]], to_doc, [0.95, 0.95, 0.95], 0.6);
+            out.path(&format!("{GEN_PREFIX}zebra.{tag}"), &stripes, to_doc, [0.9, 0.9, 0.9], 0.6, false);
+            out.path(&format!("{GEN_PREFIX}stop.{tag}"), &[vec![along(7.0, -hw), along(7.0, hw)]], to_doc, [0.95, 0.95, 0.95], 0.6, false);
         }
     }
     Ok(out.finish())
@@ -245,4 +245,40 @@ pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
 /// The same as a JSON value (for tests and callers that want one).
 pub fn build(input: &Value, params: &Value) -> Result<Value, String> {
     serde_json::from_str(&build_text(input, params)?).map_err(|e| e.to_string())
+}
+
+/// Command "Add Junction": keeps every selected object and adds one junction marker at route metre `s` (needs the centerline selected too).
+pub fn add_junction_text(input: &Value, params: &Value) -> Result<String, String> {
+    let items = items_from_filter_input(input);
+    let sc = Scene::from_items(&items)?;
+    let s = params["s"].as_f64().ok_or("Give the route metre `s` where the junction goes.")?;
+    if !(0.0..=sc.cl.len()).contains(&s) {
+        return Err(format!("s = {s} is off the road (0 to {:.1} m).", sc.cl.len()));
+    }
+    let word = |key: &str, default: &str| params[key].as_str().filter(|v| !v.is_empty()).unwrap_or(default).to_string();
+    let clean = |t: String| t.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' }).collect::<String>();
+    // Next free id: the id the caller gave, else the letter of the existing junctions (C by default) and the next number.
+    let id = match params["junction"].as_str().filter(|v| !v.is_empty()) {
+        Some(id) => clean(id.to_string()),
+        None => {
+            let letter = sc.junctions.first().and_then(|j| j.id.chars().next()).unwrap_or('C');
+            let top = sc.junctions.iter().filter_map(|j| j.id[1..].parse::<u32>().ok()).max().unwrap_or(0);
+            format!("{letter}{}", top + 1)
+        }
+    };
+    if sc.junctions.iter().any(|j| j.id == id) {
+        return Err(format!("A junction {id} already exists."));
+    }
+    let (kind, side, label) = (word("kind", "tee"), word("side", "right"), clean(word("label", "")));
+    let name = if label.is_empty() { format!("{id}.{kind}.{side}") } else { format!("{id}.{kind}.{side}.{label}") };
+    let c = sc.cl.at(s).0;
+    let square = vec![[c[0] - 1.5, c[1] - 1.5], [c[0] + 1.5, c[1] - 1.5], [c[0] + 1.5, c[1] + 1.5], [c[0] - 1.5, c[1] + 1.5]];
+    let mut out = Out::new();
+    for it in &items {
+        if let Some(id) = it.id {
+            out.keep(id);
+        }
+    }
+    out.path(&name, &[square], |p| sc.to_doc(p), [0.0, 0.4, 0.8], 0.5, true);
+    Ok(out.finish())
 }
