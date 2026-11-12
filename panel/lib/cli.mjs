@@ -31,3 +31,7 @@ export const library = () => runCli(["library"]);
 export const editCrossSection = (text, op) => runCli(["edit", text, ...op.map(String)]);
 /** Checks a junction description (JSON text). {ok, junction, summary} or {ok: false, error}. */
 export const parseJunction = (jsonText) => runCli(["parse-junction", jsonText]);
+/** What a proposed cross-section changes compared with the current one, as sentences. */
+export const diffCrossSection = (current, proposed) => runCli(["diff", current, proposed]);
+/** Checks an intersection description (JSON text) for two crossing roads. {ok, crossing, summary} or {ok: false, error}. */
+export const parseCrossing = (jsonText) => runCli(["parse-crossing", jsonText]);

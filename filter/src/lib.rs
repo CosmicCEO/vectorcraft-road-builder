@@ -8,7 +8,7 @@ use serde_json::Value;
 const MANIFEST: &str = r#"{
   "id": "com.cosmicceo.roadbuilder.build",
   "name": "Build Road",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "kind": "filter",
   "author": "CosmicCEO",
   "description": "Builds roads from the lines you draw: a line named road.<id> becomes the road described by its cross-section (lanes, bike lanes, margins ...). Select All first, so every road is included.",
@@ -21,7 +21,7 @@ const MANIFEST: &str = r#"{
       "id": "set_cross_section",
       "label": "Describe Road (Cross-section)",
       "params": {
-        "cross_section": {"type": "string", "default": "lane fwd | lane back", "maxLength": 1000, "label": "Cross-section", "help": "Left to right, separated by |. Each item: an element (lane, bike-lane, apron, shoulder, margin, median, turn-pocket, sidewalk ...), optional direction (N S E W fwd back), width (3, 3m, 10ft), repeat (x2). Start with 'facing N:' to say which way the list reads. Example: facing N: bike-lane | apron | lane S x2 | margin 3 | lane N x2 | apron | bike-lane"},
+        "cross_section": {"type": "string", "default": "lane back | lane fwd", "maxLength": 1000, "label": "Cross-section", "help": "Left to right, separated by |. Each item: an element (lane, bike-lane, apron, shoulder, margin, median, turn-pocket, sidewalk ...), optional direction (N S E W fwd back), width (3, 3m, 10ft), repeat (x2). Start with 'facing N:' to say which way the list reads. Example: facing N: bike-lane | apron | lane S x2 | margin 3 | lane N x2 | apron | bike-lane"},
         "segment": {"type": "string", "default": "", "maxLength": 16, "label": "Road id", "help": "Leave empty to use the selected line (a plain line becomes a new road)."},
         "anchor": {"type": "string", "default": "", "maxLength": 24, "label": "Line follows", "help": "Which part of the road the drawn line follows: auto (the middle of the median or margin if there is one, else the middle of the road), center, left, right, or an element name such as margin. Leave empty to keep the current setting."},
         "scope": {"type": "choice", "options": ["segment", "selected"], "default": "segment", "help": "segment: every piece of this road. selected: only the selected pieces (they get an id of their own, e.g. after you broke the line and want to change one piece)."}
@@ -31,8 +31,15 @@ const MANIFEST: &str = r#"{
       "id": "set_junction",
       "label": "Describe Junction",
       "params": {
-        "description": {"type": "string", "default": "{\"legs\": [{\"side\": \"left\", \"cross_section\": \"lane fwd | lane back\"}, {\"side\": \"right\", \"cross_section\": \"lane fwd | lane back\"}], \"control\": \"signal\", \"crosswalks\": true}", "maxLength": 3000, "label": "Junction (JSON)", "help": "legs: up to two ({side: left/right or west/east/north/south, cross_section, length}); control: none, signal or stop; crosswalks: true/false; radius: kerb corner radius in metres. No legs = just carry the road across the gap."},
+        "description": {"type": "string", "default": "{\"legs\": [{\"side\": \"left\", \"cross_section\": \"lane back | lane fwd\"}, {\"side\": \"right\", \"cross_section\": \"lane back | lane fwd\"}], \"control\": \"signal\", \"crosswalks\": true}", "maxLength": 3000, "label": "Junction (JSON)", "help": "legs: up to two ({side: left/right or west/east/north/south, cross_section, length}); control: none, signal or stop; crosswalks: true/false; radius: kerb corner radius in metres. No legs = just carry the road across the gap."},
         "junction": {"type": "string", "default": "", "maxLength": 16, "label": "Junction id", "help": "Leave empty to use the selected connecting line (a plain line becomes a new junction)."}
+      }
+    },
+    {
+      "id": "set_crossing",
+      "label": "Make Intersection",
+      "params": {
+        "description": {"type": "string", "default": "{\"treatment\": \"signal\", \"crosswalks\": true}", "maxLength": 1000, "label": "Intersection (JSON)", "help": "treatment: signal, two-way-stop, four-way-stop, uncontrolled, overpass, roundabout (cloverleaf later); crosswalks: true/false; radius: kerb corner radius in metres; minor: road that stops (two-way stop); over: road that goes over (overpass); diameter: roundabout size in metres. Select one line of each of the two roads that cross."}
       }
     },
     {
@@ -55,6 +62,7 @@ fn run(input: &[u8], params: &Value) -> Result<Output, String> {
         Some("add_junction") => builder::add_junction_text(&input, params),
         Some("set_cross_section") => builder::set_cross_section_text(&input, params),
         Some("set_junction") => builder::set_junction_text(&input, params),
+        Some("set_crossing") => builder::set_crossing_text(&input, params),
         _ => builder::build_text(&input, params),
     }
     .map(Output::Raw)

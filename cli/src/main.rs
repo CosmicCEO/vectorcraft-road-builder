@@ -7,7 +7,7 @@
 //! ```
 //! `parse` and `edit` print `{"ok": true, "canonical", "facing", "items": [...], "total_width", "notes"}` or `{"ok": false, "error"}`.
 
-use road_builder_core::crosssection::{Parsed, format, parse};
+use road_builder_core::crosssection::{Item, Parsed, format, parse};
 use road_builder_core::junction::{Control, JunctionSpec};
 use road_builder_core::library::Library;
 use serde_json::{Value, json};
@@ -35,6 +35,64 @@ fn describe(p: &Parsed, lib: &Library) -> Value {
         })
         .collect();
     json!({"ok": true, "canonical": format(p), "facing": p.facing.map(|w| w.letter()), "items": items, "total_width": (total * 1000.0).round() / 1000.0, "notes": p.notes})
+}
+
+fn label(it: &Item, lib: &Library) -> String {
+    lib.get(&it.kind).map_or(it.kind.clone(), |d| d.label.to_lowercase())
+}
+
+fn width(it: &Item, lib: &Library) -> f64 {
+    it.width.or(lib.get(&it.kind).map(|d| d.width)).unwrap_or(0.0)
+}
+
+fn way_word(w: Option<road_builder_core::crosssection::Way>) -> &'static str {
+    use road_builder_core::crosssection::Way::*;
+    match w {
+        Some(North) => "northbound",
+        Some(South) => "southbound",
+        Some(East) => "eastbound",
+        Some(West) => "westbound",
+        Some(Fwd) => "along the line",
+        Some(Back) => "against the line",
+        None => "no direction",
+    }
+}
+
+/// The differences between two cross-sections as plain sentences: elements are matched in order by kind (longest common subsequence),
+/// so a removal, an addition, a change of direction or width, and a different reading side each show up on their own line.
+fn changes(a: &Parsed, b: &Parsed, lib: &Library) -> Vec<String> {
+    let (n, m) = (a.items.len(), b.items.len());
+    let mut t = vec![vec![0usize; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            t[i][j] = if a.items[i].kind == b.items[j].kind { t[i + 1][j + 1] + 1 } else { t[i + 1][j].max(t[i][j + 1]) };
+        }
+    }
+    let mut out = Vec::new();
+    if a.facing != b.facing {
+        out.push(format!("reading side changed from {} to {}", a.facing.map_or("the line", |w| w.letter()), b.facing.map_or("the line", |w| w.letter())));
+    }
+    let (mut i, mut j) = (0, 0);
+    while i < n || j < m {
+        if i < n && j < m && a.items[i].kind == b.items[j].kind && t[i][j] == t[i + 1][j + 1] + 1 {
+            let (x, y) = (&a.items[i], &b.items[j]);
+            if x.way != y.way {
+                out.push(format!("{}: direction {} to {}", label(x, lib), way_word(x.way), way_word(y.way)));
+            }
+            if (width(x, lib) - width(y, lib)).abs() > 1e-9 {
+                out.push(format!("{}: width {} m to {} m", label(x, lib), width(x, lib), width(y, lib)));
+            }
+            i += 1;
+            j += 1;
+        } else if j < m && (i == n || t[i][j + 1] >= t[i + 1][j]) {
+            out.push(format!("added {} ({} m{})", label(&b.items[j], lib), width(&b.items[j], lib), if b.items[j].way.is_some() { format!(", {}", way_word(b.items[j].way)) } else { String::new() }));
+            j += 1;
+        } else {
+            out.push(format!("removed {} ({} m{})", label(&a.items[i], lib), width(&a.items[i], lib), if a.items[i].way.is_some() { format!(", {}", way_word(a.items[i].way)) } else { String::new() }));
+            i += 1;
+        }
+    }
+    out
 }
 
 fn fail(msg: impl Into<String>) -> Value {
@@ -72,6 +130,12 @@ fn run(args: &[String], lib: &Library) -> Value {
             };
             done.map_or_else(fail, |()| describe(&p, lib))
         }
+        Some("diff") => match (args.get(1).map(|t| parse(t, lib)), args.get(2).map(|t| parse(t, lib))) {
+            (Some(Ok(a)), Some(Ok(b))) => json!({"ok": true, "changes": changes(&a, &b, lib)}),
+            (Some(Err(e)), _) => fail(format!("current: {e}")),
+            (_, Some(Err(e))) => fail(format!("proposed: {e}")),
+            _ => fail("usage: diff \"<current>\" \"<proposed>\""),
+        },
         Some("parse-junction") => {
             let Some(text) = args.get(1) else { return fail("usage: parse-junction '<junction JSON>'") };
             let value: Value = match serde_json::from_str(text) {
@@ -85,6 +149,14 @@ fn run(args: &[String], lib: &Library) -> Value {
                 json!({"ok": true, "junction": j.to_json(), "summary": summary})
             })
         }
+        Some("parse-crossing") => {
+            let Some(text) = args.get(1) else { return fail("usage: parse-crossing '<crossing JSON>'") };
+            let value: Value = match serde_json::from_str(text) {
+                Ok(v) => v,
+                Err(e) => return fail(format!("not valid JSON: {e}")),
+            };
+            road_builder_core::crossing::CrossingSpec::from_json(&value).map_or_else(fail, |c| json!({"ok": true, "crossing": c.to_json(), "summary": c.summary()}))
+        }
         Some("library") => {
             let els: Vec<Value> = lib
                 .names()
@@ -94,7 +166,7 @@ fn run(args: &[String], lib: &Library) -> Value {
                 .collect();
             json!({"ok": true, "elements": els})
         }
-        _ => fail("usage: road-builder-cli parse|edit|parse-junction|library ..."),
+        _ => fail("usage: road-builder-cli parse|edit|diff|parse-junction|parse-crossing|library ..."),
     }
 }
 

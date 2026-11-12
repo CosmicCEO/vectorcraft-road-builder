@@ -4,8 +4,8 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { library, parseCrossSection, parseJunction } from "./cli.mjs";
-import { extractJson, extractLine, junctionSystemPrompt, junctionUserPrompt, systemPrompt, userPrompt } from "./prompt.mjs";
+import { library, parseCrossSection, parseCrossing, parseJunction } from "./cli.mjs";
+import { crossingSystemPrompt, crossingUserPrompt, extractJson, extractLine, junctionSystemPrompt, junctionUserPrompt, systemPrompt, userPrompt } from "./prompt.mjs";
 
 const here = import.meta.dirname;
 
@@ -53,7 +53,9 @@ export async function ask(cfg, { system, user, request }) {
     }
     case "cli": {
       // Any program: reads the request as JSON on stdin, prints the cross-section (plain text, or JSON with a cross_section field).
-      const out = (await run(cfg.command, cfg.args ?? [], { input: JSON.stringify({ system, user, ...request }) })).trim();
+      // A command starting with ./ is relative to the repository (e.g. ./target/apple-fm-agent).
+      const command = cfg.command.startsWith("./") ? resolve(here, "../..", cfg.command) : cfg.command;
+      const out = (await run(command, cfg.args ?? [], { input: JSON.stringify({ system, user, ...request }) })).trim();
       try {
         const j = JSON.parse(out);
         return typeof j === "string" ? j : j.cross_section ?? out;
@@ -131,4 +133,36 @@ export async function proposeJunction({ description, current = null, provider, m
     user = `${junctionUserPrompt(request)}\n\nYour previous answer was: ${json || String(reply).slice(0, 300)}\nIt was rejected: ${parsed.error}\nReply again with a corrected JSON object only.`;
   }
   return { ok: false, error: `the agent could not produce a valid junction: ${attempts.at(-1)?.error}`, attempts };
+}
+
+/**
+ * Turns a description of how two crossing roads meet (lighted, stops, overpass, roundabout ...) into a validated intersection.
+ * `roads` are the two road ids; `current` is the present description (an object) when editing. Returns {ok: true, crossing, summary, attempts} or {ok: false, error, attempts}.
+ */
+export async function proposeCrossing({ description, current = null, roads, provider, maxAttempts = 2 }) {
+  const system = crossingSystemPrompt();
+  const request = { description, current, roads, kind: "crossing" };
+  let user = crossingUserPrompt(request);
+  const attempts = [];
+  for (let n = 1; n <= maxAttempts; n++) {
+    let reply;
+    try {
+      reply = await ask(provider, { system, user, request });
+    } catch (e) {
+      return { ok: false, error: e.message, attempts };
+    }
+    const json = extractJson(reply);
+    let parsed = { ok: false, error: "the answer had no JSON object in it" };
+    if (json) {
+      try {
+        parsed = await parseCrossing(JSON.stringify({ ...JSON.parse(json), roads }));
+      } catch {
+        parsed = { ok: false, error: "the answer was not valid JSON" };
+      }
+    }
+    attempts.push({ reply: String(reply).slice(0, 600), json, ok: parsed.ok, error: parsed.error });
+    if (parsed.ok) return { ...parsed, attempts };
+    user = `${crossingUserPrompt(request)}\n\nYour previous answer was: ${json || String(reply).slice(0, 300)}\nIt was rejected: ${parsed.error}\nReply again with a corrected JSON object only.`;
+  }
+  return { ok: false, error: `the agent could not produce a valid intersection: ${attempts.at(-1)?.error}`, attempts };
 }

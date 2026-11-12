@@ -7,6 +7,7 @@ import { gunzipSync } from "node:zlib";
 export const PLUGIN_ID = "com.cosmicceo.roadbuilder.build";
 export const SET_CROSS_SECTION = `plugin.${PLUGIN_ID}.set_cross_section`;
 export const SET_JUNCTION = `plugin.${PLUGIN_ID}.set_junction`;
+export const SET_CROSSING = `plugin.${PLUGIN_ID}.set_crossing`;
 
 /** The segment id of a road line (`road.a` is `a`, plain `road` is `main`), or null. Mirrors core/src/roads.rs. */
 export function segmentId(name = "") {
@@ -22,6 +23,17 @@ export function junctionId(name = "") {
   return name.slice(9).split(".")[0] || "main";
 }
 
+/** Which road or junction a generated shape belongs to: `gen.road.<id>.<piece>.…` or `gen.junction.<id>.…`, else null. */
+export function shapeOwner(name = "") {
+  let m = /^gen\.road\.([^.]+)\.(\d+)\./.exec(name);
+  if (m) return { role: "road-shape", segment: m[1], piece: Number(m[2]) };
+  m = /^gen\.junction\.([^.]+)\./.exec(name);
+  if (m) return { role: "junction-shape", segment: m[1] };
+  m = /^gen\.crossing\.([^.]+)\./.exec(name);
+  if (m) return { role: "crossing-shape", segment: m[1] };
+  return null;
+}
+
 const OWN = /^(gen\.|profile\.|flag\.|arrow\.)|^centerline$|^[A-Z]\d+\./;
 
 /** What a selected object is to the panel: a road piece, a plain line that could become a road, or something else. */
@@ -31,6 +43,8 @@ export function classify(node) {
   if (segment) return { role: "road", segment };
   const junction = isPath ? junctionId(node.name) : null;
   if (junction) return { role: "junction", segment: junction };
+  const shape = isPath ? shapeOwner(node.name) : null;
+  if (shape) return shape;
   if (isPath && !OWN.test(node.name ?? "")) return { role: "line", segment: null };
   return { role: "other", segment: null };
 }

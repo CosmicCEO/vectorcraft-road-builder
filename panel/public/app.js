@@ -72,12 +72,45 @@ function show(s) {
   else if (t.kind === "line") ctx.append(el("strong", {}, "A plain line is selected"), el("p", { className: "muted" }, s.mode === "connection" ? "Describe the junction below, or just carry the road across." : "Describe it below to turn it into a road."));
   else if (t.kind === "road") ctx.append(el("strong", {}, `Road ${s.road.segment}`), el("p", { className: "muted" }, s.road.described ? `${s.road.pieces.selected} of ${s.road.pieces.total} piece${s.road.pieces.total === 1 ? "" : "s"} selected` : "No description yet (drawn as two lanes)"));
   else if (t.kind === "junction") ctx.append(el("strong", {}, `Junction ${s.junction.id}`), el("p", { className: "muted" }, s.junction.described ? "A connecting line with a description" : "A connecting line, not described yet"));
+  else if (t.kind === "crossing") ctx.append(el("strong", {}, `Roads ${t.roads[0]} and ${t.roads[1]} cross`), el("p", { className: "muted" }, s.crossing?.described ? "They form an intersection. Change it below, then Draw." : "Choose what happens where they cross, then Draw."));
   else ctx.append(el("strong", {}, "Select one line or one road"), el("p", { className: "muted" }, "The selection holds something this panel does not describe."));
+  if (t && (t.kind === "road" || t.kind === "junction") && !s.busy) {
+    const b = el("button", { className: "plain", title: "Select the road's own line in VectorCraft, to move or reshape it" }, "Select the line");
+    b.onclick = () => act("selectline");
+    ctx.append(el("div", { className: "row" }, b, el("span", { className: "muted" }, "Click anywhere on a road to select it here.")));
+  }
 
   // A plain line can be a road or a connection between two roads.
   $("modeCard").hidden = t?.kind !== "line";
   for (const r of document.querySelectorAll("input[name=mode]")) r.checked = r.value === s.mode;
   $("matchRow").hidden = s.mode !== "connection";
+
+  // Crossing card: the proposed intersection, or the stored one, or the starting suggestion for two selected roads.
+  const pc = s.pending?.kind === "crossing" ? s.pending : null;
+  const cv = t?.kind === "crossing" && s.crossing ? { spec: pc ? pc.crossing : s.crossing.spec, summary: pc ? pc.summary : s.crossing.summary, proposed: !!pc } : null;
+  $("crossingCard").hidden = !cv;
+  if (cv) {
+    const [ra, rb] = s.crossing.roads;
+    $("ctitle").textContent = cv.proposed ? "Proposed intersection" : s.crossing.described ? "Intersection" : "Make an intersection";
+    $("casked").textContent = pc?.description ? `You asked: “${pc.description}”` : "";
+    $("casked").hidden = !pc?.description;
+    $("csummary").textContent = cv.summary;
+    $("ctreat").value = cv.spec.treatment;
+    $("ccross").checked = !!cv.spec.crosswalks;
+    $("ccrossRow").hidden = cv.spec.treatment === "overpass" || cv.spec.treatment === "cloverleaf";
+    const pick = (id, blank) => {
+      const sel = $(id);
+      if (sel.options.length !== 3 || sel.options[1].value !== ra || sel.options[2].value !== rb) sel.replaceChildren(el("option", { value: "", textContent: blank }), el("option", { value: ra, textContent: `Road ${ra}` }), el("option", { value: rb, textContent: `Road ${rb}` }));
+      return sel;
+    };
+    pick("cminor", "the narrower road").value = cv.spec.minor ?? "";
+    pick("cover", `Road ${ra}`).value = cv.spec.over ?? "";
+    $("cminorRow").hidden = cv.spec.treatment !== "two-way-stop";
+    $("coverRow").hidden = cv.spec.treatment !== "overpass";
+    $("cdiaRow").hidden = cv.spec.treatment !== "roundabout";
+    if (document.activeElement !== $("cdia")) $("cdia").value = cv.spec.diameter ?? 40;
+    $("ccancel").hidden = !cv.proposed;
+  }
 
   // Junction card: the proposed junction, or the selected junction's description.
   const jv = pj ? { spec: pj.junction, summary: pj.summary, proposed: true } : t?.kind === "junction" && s.junction ? { spec: s.junction.spec, summary: s.junction.summary } : null;
@@ -99,10 +132,10 @@ function show(s) {
     $("jcancel").hidden = !jv.proposed;
   }
 
-  $("road").hidden = !s.road || !!pj;
+  $("road").hidden = !s.road || !!pj || !!cv;
   if (s.road && !pj) drawItems($("items"), $("bar"), $("total"), s.road, !s.pending);
 
-  const pr = s.pending && !pj ? s.pending : null; // a proposed road
+  const pr = s.pending && !pj && !pc ? s.pending : null; // a proposed road
   $("proposal").hidden = !pr;
   $("asked").textContent = pr?.description ? `You asked: “${pr.description}”` : "";
   $("asked").hidden = !pr?.description;
@@ -116,12 +149,13 @@ function show(s) {
   scope.hidden = !multi;
   if (multi) $("scope-all").textContent = `All ${s.road.pieces.total} pieces of this road`;
 
+  const wordsFor = t?.kind === "crossing" ? "Describe the intersection, or the change you want (lighted, two-way stop, overpass, roundabout …)" : null;
   const junctionish = t?.kind === "junction" || (t?.kind === "line" && s.mode === "connection");
-  $("wordsLabel").textContent = junctionish ? "Describe the junction, or the change you want" : "Describe the road, or the change you want";
+  $("wordsLabel").textContent = wordsFor ?? (junctionish ? "Describe the junction, or the change you want" : "Describe the road, or the change you want");
   const canAct = !!t && t.kind !== "other" && !s.busy;
   $("propose").disabled = !canAct || !$("words").value.trim();
   $("draw").disabled = !canAct;
-  $("draw").textContent = s.busy === "drawing" ? "Drawing…" : s.pending ? "Draw this" : "Redraw";
+  $("draw").textContent = s.busy === "drawing" ? "Drawing…" : s.pending ? "Draw this" : t?.kind === "crossing" && !s.crossing?.described ? "Draw this intersection" : "Redraw";
   $("thinking").hidden = s.busy !== "thinking";
   const msg = $("message");
   msg.textContent = s.message ?? "";
@@ -134,6 +168,13 @@ $("words").onkeydown = (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey
 $("draw").onclick = () => act("draw", { scope: document.querySelector("input[name=scope]:checked")?.value });
 $("cancel").onclick = () => act("cancel");
 $("jcancel").onclick = () => act("cancel");
+$("ccancel").onclick = () => act("cancel");
+const cpatch = (patch) => act("crossing", { patch });
+$("ctreat").onchange = () => cpatch({ treatment: $("ctreat").value });
+$("ccross").onchange = () => cpatch({ crosswalks: $("ccross").checked });
+$("cminor").onchange = () => cpatch({ minor: $("cminor").value || null });
+$("cover").onchange = () => cpatch({ over: $("cover").value || null });
+$("cdia").onchange = () => cpatch({ diameter: Number($("cdia").value) || 40 });
 $("match").onclick = () => act("match");
 for (const r of document.querySelectorAll("input[name=mode]")) r.onchange = () => act("mode", { mode: r.value });
 $("jcontrol").onchange = () => act("junction", { patch: { control: $("jcontrol").value } });

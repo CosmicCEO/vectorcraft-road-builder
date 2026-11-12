@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 
 pub const ROAD_PREFIX: &str = "road.";
 /// What a road gets before anyone has described it: two lanes, one each way.
-pub const DEFAULT_CROSS_SECTION: &str = "lane fwd | lane back";
+pub const DEFAULT_CROSS_SECTION: &str = "lane back | lane fwd";
 
 /// The segment id of a road line (`road.a` is `a`; plain `road` is `main`), or None if the name is not a road.
 pub fn segment_id(name: &str) -> Option<String> {
@@ -104,6 +104,27 @@ impl Spec {
             self.raw["junctions"] = json!({});
         }
         self.raw["junctions"][id] = spec.to_json();
+    }
+
+    /// All stored crossings (id and description), where two described roads cross.
+    pub fn crossings(&self) -> Vec<(String, Value)> {
+        self.raw["crossings"].as_object().map(|m| m.iter().filter(|(_, v)| v.is_object()).map(|(k, v)| (k.clone(), v.clone())).collect()).unwrap_or_default()
+    }
+
+    /// The id of the stored crossing between these two roads, in either order.
+    pub fn crossing_between(&self, a: &str, b: &str) -> Option<String> {
+        self.crossings().into_iter().find(|(_, v)| {
+            let roads: Vec<&str> = v["roads"].as_array().map(|r| r.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+            roads.len() == 2 && ((roads[0] == a && roads[1] == b) || (roads[0] == b && roads[1] == a))
+        }).map(|(id, _)| id)
+    }
+
+    /// Stores a crossing description (already checked).
+    pub fn set_crossing(&mut self, id: &str, spec: &crate::crossing::CrossingSpec) {
+        if !self.raw["crossings"].is_object() {
+            self.raw["crossings"] = json!({});
+        }
+        self.raw["crossings"][id] = spec.to_json();
     }
 
     /// The cross-section and anchor for a segment, falling back to the default.

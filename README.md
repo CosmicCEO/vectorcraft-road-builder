@@ -59,6 +59,22 @@ cross-section and length; control none, signal or stop; crosswalks; kerb radius)
 and the legs before pressing Draw. In VectorCraft's menu the command is **Describe Junction**. Not built yet: turn pockets, curved legs,
 roundabouts and junctions that are not at right angles.
 
+## Roads that cross (new in 0.4)
+
+Draw one road across another, select both, and the panel offers **Make an intersection**. Pick what happens where they cross:
+lighted intersection, two-way stop (the narrower road stops unless you name one), four-way stop, no control, overpass/underpass (one
+road bridges the other, with parapets and abutments), roundabout (counter-clockwise ring, splitter islands, yield lines). Crosswalks are
+optional. Any angle works (the paved box is a parallelogram; kerb corners are true arcs), and each road can curve: the local direction at
+the crossing is used. Cloverleaf is listed but not built yet. Stored as `crossings.<id>` (`treatment`, `crosswalks`, `radius`, `minor`,
+`over`, `diameter`); menu command **Make Intersection**; `road-builder-cli parse-crossing`.
+
+## One layer per road (new in 0.4)
+
+After each Draw the panel sorts the drawing into layers: `road r1` holds `road r1 spine` (the red line you edit, on top) and `road r1 drawing`
+(everything built from it); junctions get the same two parts, an intersection gets one layer. Hide or lock a spine layer and the road stays
+visible. The panel shows and unlocks these layers just for the rebuild (a hidden or locked object is not seen by a filter, so its road would
+vanish) and puts your hiding and locking back afterwards. Rebuilding from VectorCraft's own menu does not sort layers; press Draw in the panel.
+
 ## The companion panel (new in 0.3)
 
 A small page beside VectorCraft where you describe roads in words and click them to see and change their elements:

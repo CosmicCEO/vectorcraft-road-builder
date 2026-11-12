@@ -44,7 +44,7 @@ fn bbox(p: &[[f64; 2]]) -> ([f64; 2], [f64; 2]) {
 }
 
 fn four_way() -> Value {
-    json!({"legs": [{"side": "right", "cross_section": "lane fwd | lane back", "length": 40}, {"side": "left", "cross_section": "lane fwd | lane back", "length": 40}], "control": "signal", "crosswalks": true, "radius": 6})
+    json!({"legs": [{"side": "right", "cross_section": "lane back | lane fwd", "length": 40}, {"side": "left", "cross_section": "lane back | lane fwd", "length": 40}], "control": "signal", "crosswalks": true, "radius": 6})
 }
 
 #[test]
@@ -109,7 +109,7 @@ fn crosswalks_and_control_only_appear_when_asked_for() {
 
 #[test]
 fn a_tee_keeps_the_far_side_of_the_road() {
-    let (out, _) = run(&spec_with(json!({"legs": [{"side": "east", "cross_section": "lane fwd | lane back"}], "control": "none"})));
+    let (out, _) = run(&spec_with(json!({"legs": [{"side": "east", "cross_section": "lane back | lane fwd"}], "control": "none"})));
     let (lo, hi) = bbox(&pts(&out, "gen.junction.x.box"));
     // On the west (no leg) side the box stops at the outer travel lane (200 - 8.7), so the bike lane and apron carry on across.
     assert!((lo[0] - 191.3).abs() < 1e-3, "{lo:?}");
@@ -121,7 +121,7 @@ fn a_tee_keeps_the_far_side_of_the_road() {
 #[test]
 fn compass_sides_follow_the_direction_the_line_is_drawn() {
     // The line runs north, so "west" is the left side: the leg goes to x < 189.
-    let (out, notes) = run(&spec_with(json!({"legs": [{"side": "west", "cross_section": "lane fwd | lane back"}]})));
+    let (out, notes) = run(&spec_with(json!({"legs": [{"side": "west", "cross_section": "lane back | lane fwd"}]})));
     assert!(notes.is_empty());
     let (lo, hi) = bbox(&pts(&out, "gen.junction.x.leg.1.surface.0.lane"));
     assert!(hi[0] < 190.0 && lo[0] < 160.0, "{lo:?} {hi:?}");
@@ -143,7 +143,7 @@ fn a_junction_description_is_checked() {
     let lib = Library::builtin();
     let ok = JunctionSpec::from_json(&four_way(), &lib).unwrap();
     assert_eq!((ok.kind(), ok.control, ok.crosswalks), ("cross", Control::Signal, true));
-    assert_eq!(ok.to_json()["legs"][0]["cross_section"], "lane fwd | lane back", "stored in canonical form");
+    assert_eq!(ok.to_json()["legs"][0]["cross_section"], "lane back | lane fwd", "stored in canonical form");
     let err = |v: Value| JunctionSpec::from_json(&v, &lib).unwrap_err();
     assert!(err(json!({"legs": [{"side": "up"}]})).contains("side must be"));
     assert!(err(json!({"legs": [{"side": "left"}, {"side": "left"}]})).contains("same side"));
@@ -152,4 +152,32 @@ fn a_junction_description_is_checked() {
     assert!(err(json!({"legs": [{"side": "left", "cross_section": "lane | warp-drive"}]})).contains("leg 1: unknown element"));
     let clamped = JunctionSpec::from_json(&json!({"radius": 99, "legs": [{"side": "e", "length": 1}]}), &lib).unwrap();
     assert_eq!((clamped.radius, clamped.legs[0].length, clamped.legs[0].side.as_str()), (20.0, 5.0, "east"));
+}
+
+#[test]
+fn stop_bars_and_signs_are_on_the_side_traffic_enters() {
+    // Right-hand traffic. The line runs north and crosses at y = 360 (document y runs down the page, so smaller y is north).
+    let mut j = four_way();
+    j["control"] = json!("stop");
+    let (out, _) = run(&spec_with(j));
+    // The east leg's traffic comes in heading west, so it uses the north half of the leg: its stop bar and its sign are both north of the centre.
+    let bar = pts(&out, "gen.junction.x.stop.leg.1");
+    assert!(bar.iter().all(|p| p[1] <= 360.0 + 1e-6) && (bar.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min) - 356.4).abs() < 1e-3, "east leg bar on the north half: {bar:?}");
+    let (lo, hi) = bbox(&pts(&out, "gen.junction.x.sign.leg.1"));
+    assert!((lo[1] + hi[1]) / 2.0 < 356.4, "east leg sign is beyond the bar's north end, same side: {lo:?} {hi:?}");
+    // The west leg's traffic heads east on the south half.
+    let bar = pts(&out, "gen.junction.x.stop.leg.2");
+    assert!(bar.iter().all(|p| p[1] >= 360.0 - 1e-6) && (bar.iter().map(|p| p[1]).fold(f64::NEG_INFINITY, f64::max) - 363.6).abs() < 1e-3, "west leg bar on the south half: {bar:?}");
+    let (lo, hi) = bbox(&pts(&out, "gen.junction.x.sign.leg.2"));
+    assert!((lo[1] + hi[1]) / 2.0 > 363.6, "west leg sign beyond the bar's south end: {lo:?} {hi:?}");
+
+    // With signals the main road gets bars too: northbound traffic enters from the south in the east half, southbound from the north in the west half.
+    let (out, _) = run(&spec_with(four_way()));
+    let nb = pts(&out, "gen.junction.x.stop.road.f");
+    assert!(nb.iter().all(|p| p[0] >= 200.0 - 1e-6 && p[1] > 363.6), "northbound bar south of the junction, east half: {nb:?}");
+    let sb = pts(&out, "gen.junction.x.stop.road.b");
+    assert!(sb.iter().all(|p| p[0] <= 200.0 + 1e-6 && p[1] < 356.4), "southbound bar north of the junction, west half: {sb:?}");
+    // Signal heads follow the bars on the legs too.
+    let (lo, hi) = bbox(&pts(&out, "gen.junction.x.signal.leg.1"));
+    assert!((lo[1] + hi[1]) / 2.0 < 356.4, "east leg signal on the north side");
 }

@@ -40,6 +40,32 @@
     <div class="row"><button id="jcancel" class="plain" hidden>Cancel</button></div>
   </section>
 
+  <section id="crossingCard" class="card" hidden>
+    <h2 id="ctitle">Intersection</h2>
+    <p id="casked" class="muted asked" hidden></p>
+    <p id="csummary"></p>
+    <div class="row wrap">
+      <label>What happens where they cross
+        <select id="ctreat">
+          <option value="signal">Lighted intersection (traffic signals)</option>
+          <option value="two-way-stop">Two-way stop (the side road stops)</option>
+          <option value="four-way-stop">Four-way stop</option>
+          <option value="uncontrolled">No control</option>
+          <option value="overpass">Overpass / underpass</option>
+          <option value="roundabout">Roundabout</option>
+          <option value="cloverleaf">Cloverleaf (not built yet)</option>
+        </select>
+      </label>
+    </div>
+    <div class="row wrap">
+      <label id="cminorRow" hidden>Road that stops <select id="cminor"></select></label>
+      <label id="coverRow" hidden>Road on top <select id="cover"></select></label>
+      <label id="cdiaRow" hidden>Width <input id="cdia" type="number" min="20" max="120" step="2" value="40"> m</label>
+      <label id="ccrossRow"><input type="checkbox" id="ccross"> Crosswalks</label>
+    </div>
+    <div class="row"><button id="ccancel" class="plain" hidden>Cancel</button></div>
+  </section>
+
   <section id="road" class="card" hidden>
     <div id="bar" class="bar" aria-label="Cross-section to scale"></div>
     <ol id="items" class="items"></ol>

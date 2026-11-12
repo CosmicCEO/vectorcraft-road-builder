@@ -3,13 +3,18 @@
 
 use crate::geom::{P, Poly, add, scale};
 use crate::output::Out;
+use crate::crossing::{self, CrossingSpec};
 use crate::junction::{self, JunctionSpec, junction_id};
 use crate::roads::{self, Spec, anchor_from, segment_id};
 use crate::scene::{Scene, is_junction_name};
 use crate::vcdoc::{Item, items_from_filter_input};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 pub const GEN_PREFIX: &str = "gen.";
+/// The drawn line of a road or junction: bright and bold (metres of stroke), so it can be seen and clicked among the generated shapes.
+const SPINE_ROAD: [f64; 3] = [0.85, 0.1, 0.1];
+const SPINE_JUNCTION: [f64; 3] = [0.1, 0.35, 0.9];
+const SPINE_WIDTH: f64 = 1.0;
 
 /// (profile key, colour, stroke width, dash on/off in metres or None for solid)
 const STYLE: [(&str, [f64; 3], f64, Option<(f64, f64)>); 12] = [
@@ -130,13 +135,20 @@ pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
 
     let mut out = Out::new();
     for it in items.iter().filter(|i| !i.name.starts_with(GEN_PREFIX)) {
-        if let Some(id) = it.id {
+        let Some(id) = it.id else { continue };
+        // The line you drew stays on top of what is built from it, and is drawn bold so it is easy to find and click.
+        if segment_id(&it.name).is_some() {
+            out.keep_styled(id, SPINE_ROAD, SPINE_WIDTH);
+        } else if junction_id(&it.name).is_some() {
+            out.keep_styled(id, SPINE_JUNCTION, SPINE_WIDTH);
+        } else {
             out.keep(id);
         }
     }
     if has_road {
         roads::build(&items, &spec, &mut out);
         junction::build(&items, &spec, &mut out); // junctions are drawn over the roads they join
+        crossing::build(&items, &spec, &mut out); // and so are intersections where two roads cross
     }
     if has_legacy {
         build_legacy(&mut out, &items, params)?;
@@ -298,7 +310,7 @@ pub fn set_cross_section_text(input: &Value, params: &Value) -> Result<String, S
 pub fn set_junction_text(input: &Value, params: &Value) -> Result<String, String> {
     let items = items_from_filter_input(input);
     let mut spec = Spec::from_document_data(&params["_context"]["documentData"]);
-    let raw = params["description"].as_str().map(str::trim).filter(|t| !t.is_empty()).ok_or("Give the junction description (JSON), for example {\"legs\": [{\"side\": \"left\", \"cross_section\": \"lane fwd | lane back\"}], \"control\": \"signal\", \"crosswalks\": true}")?;
+    let raw = params["description"].as_str().map(str::trim).filter(|t| !t.is_empty()).ok_or("Give the junction description (JSON), for example {\"legs\": [{\"side\": \"left\", \"cross_section\": \"lane back | lane fwd\"}], \"control\": \"signal\", \"crosswalks\": true}")?;
     let value: Value = serde_json::from_str(raw).map_err(|e| format!("the junction description is not valid JSON: {e}"))?;
     let js = JunctionSpec::from_json(&value, &spec.library)?;
     let clean = |t: &str| t.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(16).collect::<String>();
@@ -328,6 +340,38 @@ pub fn set_junction_text(input: &Value, params: &Value) -> Result<String, String
                 Some((_, name)) => out.rename(iid, name),
                 None => out.keep(iid),
             }
+        }
+    }
+    Ok(out.finish_with(Some(&spec.to_value())))
+}
+
+/// Command "Set Crossing": the two selected roads (one line of each) cross; stores the intersection's description (see `crossing`) in the
+/// document's plug-in data. `description` is JSON (control, crosswalks, radius, minor); the two road ids come from the selection.
+pub fn set_crossing_text(input: &Value, params: &Value) -> Result<String, String> {
+    let items = items_from_filter_input(input);
+    let mut spec = Spec::from_document_data(&params["_context"]["documentData"]);
+    let mut roads: Vec<String> = Vec::new();
+    for it in &items {
+        if let Some(id) = segment_id(&it.name).filter(|id| !roads.contains(id)) {
+            roads.push(id);
+        }
+    }
+    let [a, b] = <[String; 2]>::try_from(roads).map_err(|r: Vec<String>| format!("Select exactly two roads (one line of each) that cross; {} road{} selected.", r.len(), if r.len() == 1 { " is" } else { "s are" }))?;
+    let mut value: Value = match params["description"].as_str().map(str::trim).filter(|t| !t.is_empty()) {
+        Some(raw) => serde_json::from_str(raw).map_err(|e| format!("the intersection description is not valid JSON: {e}"))?,
+        None => json!({}),
+    };
+    value["roads"] = json!([a, b]);
+    let cs = CrossingSpec::from_json(&value)?;
+    if crossing::find(&items, &a, &b).is_none() {
+        return Err(format!("Roads {a} and {b} do not cross within the selected lines. Draw one across the other, then select both."));
+    }
+    let id = spec.crossing_between(&a, &b).unwrap_or_else(|| (1..).map(|n| format!("k{n}")).find(|id| !spec.crossings().iter().any(|(k, _)| k == id)).unwrap_or_default());
+    spec.set_crossing(&id, &cs);
+    let mut out = Out::new();
+    for it in &items {
+        if let Some(iid) = it.id {
+            out.keep(iid);
         }
     }
     Ok(out.finish_with(Some(&spec.to_value())))

@@ -117,6 +117,19 @@ the last Ross-Bridge-specific names from the core. Junction templates, part-way 
 - Live: the whole intersection story replayed through the panel against the real app (`panel/demo/junction-demo.mjs`, video of 8 steps).
 - Honest limits: the owner's sentence also mentions a turn pocket; the junction prompt tells the agent to leave that out until 3b exists.
 
+## Phase 3d status (crossings and layers)
+- `core/src/crossing.rs`: two roads that cross become an intersection by treatment (signal, two-way stop, four-way stop, uncontrolled,
+  overpass, roundabout; cloverleaf reports "not built yet"). First crossing found by segment tests; parallelogram box, fillets by the
+  tangent-length formula r/tan(theta/2), approaches use each road's own lanes (before the crossing: fwd lanes enter). 12 native tests,
+  headless engine run (oblique crossing, curved road) looked right for four treatments.
+- Panel: two selected roads (or a click on the intersection's drawing) is a "crossing" target; treatment picker, crosswalks, which road
+  stops/is on top, roundabout width; agent returns JSON, validated by `parse-crossing`.
+- Layers (`panel/lib/layers.mjs`): the plug-in cannot create layers (filters only return objects), so the panel does it with
+  `layer.new top`, `layer.newSublayer`, `layer.move`, `layer.setProps`. Found by experiment: a rebuild drops the drawing of a road whose spine
+  is hidden, and new shapes land in whichever layer holds the first selected object, so the panel unhides/unlocks, builds, sorts, restores.
+  `layer.new` without `top` nests inside a current sublayer. Limit: layers stack per road, so a later road's drawing covers an earlier road's
+  spine where they cross (use "Select the line").
+
 ## Verification at each phase
 Native unit tests for the core; the real VectorCraft engine via `scripts/roundtrip.sh` and the MCP loop (`scripts/mcp-smoke.mjs`);
 a visual check by screenshot against the story, step by step.

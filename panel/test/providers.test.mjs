@@ -41,10 +41,10 @@ test("a valid answer comes back validated and in canonical form", async () => {
 });
 
 test("an invalid answer is sent back once with the exact error", async () => {
-  const p = fake("lane | warp-drive", "lane fwd | lane back");
+  const p = fake("lane | warp-drive", "lane back | lane fwd");
   const r = await propose({ description: "two lanes", provider: p });
   assert.equal(r.ok, true);
-  assert.equal(r.canonical, "lane fwd | lane back");
+  assert.equal(r.canonical, "lane back | lane fwd");
   assert.equal(r.attempts.length, 2);
   assert.match(p.seen[1], /rejected: unknown element "warp-drive"/);
 });
@@ -71,9 +71,9 @@ test("an edit request shows the model the current text", async () => {
 test("a command provider gets the request on stdin and answers on stdout", async () => {
   const dir = mkdtempSync(join(tmpdir(), "prov-"));
   const script = join(dir, "agent.mjs");
-  writeFileSync(script, 'let t="";process.stdin.on("data",d=>t+=d).on("end",()=>{const r=JSON.parse(t);console.log(JSON.stringify({cross_section:r.description.includes("two")?"lane fwd | lane back":"lane"}))})');
+  writeFileSync(script, 'let t="";process.stdin.on("data",d=>t+=d).on("end",()=>{const r=JSON.parse(t);console.log(JSON.stringify({cross_section:r.description.includes("two")?"lane back | lane fwd":"lane"}))})');
   const r = await propose({ description: "two lane road", provider: { kind: "cli", command: process.execPath, args: [script] } });
-  assert.equal(r.canonical, "lane fwd | lane back");
+  assert.equal(r.canonical, "lane back | lane fwd");
 });
 
 test("an http provider talks to an OpenAI-style endpoint", async () => {
@@ -83,13 +83,13 @@ test("an http provider talks to an OpenAI-style endpoint", async () => {
     req.on("data", (d) => (t += d)).on("end", () => {
       body = JSON.parse(t);
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ choices: [{ message: { content: "lane fwd | lane back" } }] }));
+      res.end(JSON.stringify({ choices: [{ message: { content: "lane back | lane fwd" } }] }));
     });
   });
   await new Promise((ok) => server.listen(0, "127.0.0.1", ok));
   try {
     const cfg = { kind: "http", base_url: `http://127.0.0.1:${server.address().port}/v1`, model: "tiny" };
-    assert.equal(await ask(cfg, { system: "S", user: "U", request: {} }), "lane fwd | lane back");
+    assert.equal(await ask(cfg, { system: "S", user: "U", request: {} }), "lane back | lane fwd");
     assert.equal(body.model, "tiny");
     assert.deepEqual(body.messages.map((m) => m.role), ["system", "user"]);
   } finally {
@@ -112,7 +112,7 @@ test("the user's providers file adds to the built-in ones", () => {
   assert.ok(cfg.providers.claude && cfg.providers.local, "built-in and user providers are both there");
 });
 
-const FOUR_WAY = '{"legs": [{"side": "west", "cross_section": "lane fwd | lane back"}, {"side": "east", "cross_section": "lane fwd | lane back"}], "control": "signal", "crosswalks": true}';
+const FOUR_WAY = '{"legs": [{"side": "west", "cross_section": "lane back | lane fwd"}, {"side": "east", "cross_section": "lane back | lane fwd"}], "control": "signal", "crosswalks": true}';
 
 test("JSON is found inside whatever else the model said", () => {
   assert.equal(extractJson('Here:\n```json\n{"a": {"b": "}"}, "c": 1}\n```\nDone'), '{"a": {"b": "}"}, "c": 1}');
@@ -122,7 +122,7 @@ test("JSON is found inside whatever else the model said", () => {
 
 test("the junction prompt carries the schema, the elements and an example", async () => {
   const p = junctionSystemPrompt(await library());
-  for (const w of ["legs", "control", "crosswalks", "radius", "traffic lights", "lane fwd | lane back", "turn-pocket"]) assert.ok(p.includes(w), w);
+  for (const w of ["legs", "control", "crosswalks", "radius", "traffic lights", "lane back | lane fwd", "turn-pocket"]) assert.ok(p.includes(w), w);
   assert.match(junctionUserPrompt({ description: "add a crosswalk", current: { legs: [] } }), /Current junction:\n\{"legs":\[\]\}/);
 });
 

@@ -2,6 +2,7 @@
   "default": "claude",
   "providers": {
     "claude": {"kind": "claude", "model": "haiku", "label": "Claude (fast)"},
-    "claude-sonnet": {"kind": "claude", "model": "sonnet", "label": "Claude (more careful)"}
+    "claude-sonnet": {"kind": "claude", "model": "sonnet", "label": "Claude (more careful)"},
+    "apple": {"kind": "cli", "command": "./target/apple-fm-agent", "label": "Apple Intelligence (on this Mac)", "optional": true}
   }
 }

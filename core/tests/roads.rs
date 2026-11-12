@@ -138,10 +138,10 @@ fn describing_selected_pieces_only_leaves_the_other_pieces_alone() {
     // The road r1 was split in two; only the north piece (id 2) is selected.
     let input = json!({"objects": [line(2, "road.r1", &[[100.0, 300.0], [100.0, 100.0]])]});
     let data = story_spec("r1");
-    let p = json!({"cross_section": "lane fwd | lane back", "scope": "selected", "_context": {"documentData": data}});
+    let p = json!({"cross_section": "lane back | lane fwd", "scope": "selected", "_context": {"documentData": data}});
     let out: Value = serde_json::from_str(&set_cross_section_text(&input, &p).unwrap()).unwrap();
     assert_eq!(out["objects"][0]["name"], "road.r2", "the selected piece moves to a new id");
-    assert_eq!(out["documentData"]["segments"]["r2"]["cross_section"], "lane fwd | lane back");
+    assert_eq!(out["documentData"]["segments"]["r2"]["cross_section"], "lane back | lane fwd");
     assert_eq!(out["documentData"]["segments"]["r1"]["cross_section"], STORY, "the other piece keeps its description");
 }
 
@@ -165,7 +165,7 @@ fn a_junction_line_is_built_and_described_through_the_commands() {
     use road_builder_core::builder::set_junction_text;
     // A road piece on each side of a connecting plain line.
     let objs = vec![line(1, "road.a", &[[200.0, 700.0], [200.0, 420.0]]), line(2, "road.b", &[[200.0, 300.0], [200.0, 20.0]]), line(3, "", &[[200.0, 420.0], [200.0, 300.0]])];
-    let desc = json!({"legs": [{"side": "west", "cross_section": "lane fwd | lane back"}, {"side": "east", "cross_section": "lane fwd | lane back"}], "control": "signal", "crosswalks": true}).to_string();
+    let desc = json!({"legs": [{"side": "west", "cross_section": "lane back | lane fwd"}, {"side": "east", "cross_section": "lane back | lane fwd"}], "control": "signal", "crosswalks": true}).to_string();
     let data = json!({"segments": {"a": {"cross_section": STORY}, "b": {"cross_section": STORY}}});
     let out: Value = serde_json::from_str(&set_junction_text(&json!({"objects": [objs[2].clone()]}), &json!({"description": desc, "_context": {"documentData": data}})).unwrap()).unwrap();
     assert_eq!((out["objects"][0]["id"].as_i64(), out["objects"][0]["name"].as_str()), (Some(3), Some("junction.j1")), "the plain line becomes a junction");
@@ -184,4 +184,18 @@ fn a_junction_line_is_built_and_described_through_the_commands() {
     assert!(bad("{not json").contains("not valid JSON"));
     assert!(bad(r#"{"control": "roundabout"}"#).contains("control must be"));
     assert!(set_junction_text(&json!({"objects": []}), &json!({"description": "{}", "_context": {}})).unwrap_err().contains("Select the connecting line"));
+}
+
+#[test]
+fn the_drawn_line_stays_on_top_and_is_drawn_bold() {
+    let input = json!({"objects": [line(1, "road.a", &[[100.0, 500.0], [100.0, 100.0]]), line(2, "other", &[[0.0, 0.0], [1.0, 1.0]])]});
+    let out = build(&input, &params(story_spec("a"))).unwrap();
+    let list = objects(&out);
+    let first_kept = list.iter().position(|o| o.get("path").is_none()).unwrap();
+    // New objects are listed before every kept object, so VectorCraft stacks them below the lines you drew.
+    assert!(list[..first_kept].iter().all(|o| o.get("path").is_some()) && list[first_kept..].iter().all(|o| o.get("path").is_none()), "new objects first, kept objects after");
+    let spine = list.iter().find(|o| o["id"] == 1).unwrap();
+    assert_eq!(spine["strokes"][0]["width"], 1.0, "the road line is bold");
+    assert_eq!(spine["strokes"][0]["paint"]["color"]["r"], 0.85);
+    assert!(list.iter().find(|o| o["id"] == 2).unwrap().get("strokes").is_none(), "other objects are left alone");
 }

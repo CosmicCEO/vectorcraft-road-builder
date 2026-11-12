@@ -8,7 +8,7 @@ SHORTHAND
 - Items are separated by " | " and read LEFT TO RIGHT as seen facing the direction given after "facing".
 - Start with "facing N:" (or S, E, W) when the description says which way the road runs, and list from the left side to the right side as seen facing that way. If no orientation is given, leave "facing" out and list left to right along the drawn line.
 - An item is an element name, then optional pieces in any order: a direction (N S E W, or fwd / back) for elements that have one (travel lanes, bike lanes, turn pockets), a width ("3" = metres, "10ft"), a repeat ("x2").
-- US right-hand traffic: facing north, the lanes on the LEFT (west) side run south (S) and the lanes on the RIGHT (east) side run north (N).
+- US right-hand traffic: facing north, the lanes on the LEFT (west) side run south (S) and the lanes on the RIGHT (east) side run north (N). In the same way, facing along the line, the lane on the RIGHT is "fwd" (goes the way the line goes) and the lane on the LEFT is "back" (comes toward you): a two-lane road is "lane back | lane fwd".
 - Use only these elements (default width in brackets). If something is not listed, use the closest one; never invent a name:
 ${els}
 
@@ -17,7 +17,7 @@ Description: road runs north-south; 1 bike lane, 1 apron, 2 south lanes, a 3 m g
 facing N: bike-lane | apron | lane S x2 | margin 3 | lane N x2 | apron | bike-lane
 
 Description: a quiet two-lane street with parking on both sides
-parking-lane | lane fwd | lane back | parking-lane
+parking-lane | lane back | lane fwd | parking-lane
 
 EDITING
 When a current cross-section is given, apply the requested change to it and return the COMPLETE updated line. Keep everything that was not mentioned exactly as it was (same order, same widths). "Delete/remove X" removes that item; "add X" inserts it where it belongs in left-to-right order; "make X wider/narrower" sets that item's width.`;
@@ -42,7 +42,7 @@ The junction is where a short connecting line joins two road pieces; the main ro
 {"legs": [{"side": "...", "cross_section": "...", "length": 40}], "control": "none|signal|stop", "crosswalks": false, "radius": 6}
 - legs: 0, 1 or 2 side roads. No legs means just carry the road across the gap. One leg is a T-junction, two legs (one each side) a four-way junction.
 - side: "west", "east", "north" or "south" if the description gives compass directions, otherwise "left" or "right" as seen travelling along the main road. A leg must cross the main road, so never use the direction the main road runs.
-- cross_section: the side road written in the Road Builder shorthand: elements separated by " | ", each an element name with optional direction (fwd, back), width in metres, or repeat (x2). Elements: ${els}. A two-lane road is "lane fwd | lane back"; a "rural road" is two lanes, possibly with shoulders ("shoulder | lane fwd | lane back | shoulder").
+- cross_section: the side road written in the Road Builder shorthand: elements separated by " | ", each an element name with optional direction (fwd, back), width in metres, or repeat (x2). Elements: ${els}. A two-lane road is "lane back | lane fwd" (right-hand traffic: facing outward along the leg, the lane on the right goes outward, the lane on the left comes in toward the junction); a "rural road" is two lanes, possibly with shoulders ("shoulder | lane back | lane fwd | shoulder").
 - length: how far the leg is drawn, in metres (default 40).
 - control: "signal" for traffic lights or signals, "stop" for stop signs on the side roads, otherwise "none".
 - crosswalks: true if there are crosswalks, cross walks or pedestrian crossings.
@@ -51,7 +51,7 @@ Do not add a turn pocket or turn lane here: describe only the legs, control and 
 
 EXAMPLE
 Description: This is a 4 way intersection. The west leg is a two lane rural road, the east is a two lane rural road. There are traffic lights and cross walks at each side.
-{"legs": [{"side": "west", "cross_section": "lane fwd | lane back", "length": 40}, {"side": "east", "cross_section": "lane fwd | lane back", "length": 40}], "control": "signal", "crosswalks": true, "radius": 6}
+{"legs": [{"side": "west", "cross_section": "lane back | lane fwd", "length": 40}, {"side": "east", "cross_section": "lane back | lane fwd", "length": 40}], "control": "signal", "crosswalks": true, "radius": 6}
 
 EDITING
 When a current junction is given, apply the requested change and return the COMPLETE updated object, keeping everything not mentioned exactly as it was.`;
@@ -78,4 +78,29 @@ export function extractJson(reply) {
     else if (c === "}" && --depth === 0) return text.slice(start, i + 1);
   }
   return "";
+}
+
+export function crossingSystemPrompt() {
+  return `You turn a plain-language description of how two crossing roads meet into one JSON object. Reply with the JSON object only: no explanation, no code fence.
+
+{"treatment": "signal|two-way-stop|four-way-stop|uncontrolled|overpass|roundabout|cloverleaf", "crosswalks": false, "radius": 6, "minor": null, "over": null, "diameter": 40}
+- treatment: "signal" = lighted intersection (traffic lights); "two-way-stop" = stop signs on the minor road only; "four-way-stop" = stop signs on every approach; "uncontrolled" = nothing painted or posted; "overpass" = one road bridges the other (an underpass is the same thing seen from the road below: the road on top is "over"); "roundabout" = traffic circle; "cloverleaf" = interchange with loop ramps.
+- crosswalks: true if the description mentions crosswalks, cross walks or pedestrian crossings.
+- radius: kerb corner radius in metres (default 6).
+- minor: for a two-way stop, the id of the road that stops. Use null if the description does not say, and the narrower road will stop.
+- over: for an overpass, the id of the road that goes over. Use null if not said.
+- diameter: for a roundabout, the outside diameter in metres (default 40).
+The two roads have the ids given in the request; "minor" and "over" must be one of those two ids or null. Leave out "roads": the program adds it.
+
+EXAMPLE
+Description: lighted intersection with crosswalks
+{"treatment": "signal", "crosswalks": true, "radius": 6, "minor": null, "over": null, "diameter": 40}
+
+EDITING
+When a current intersection is given, apply the requested change and return the COMPLETE updated object, keeping everything not mentioned exactly as it was.`;
+}
+
+export function crossingUserPrompt({ description, current, roads }) {
+  const head = `The two roads are "${roads.join('" and "')}".`;
+  return current ? `${head}\nCurrent intersection:\n${JSON.stringify(current)}\n\nChange requested: ${description}` : `${head}\nDescription: ${description}`;
 }

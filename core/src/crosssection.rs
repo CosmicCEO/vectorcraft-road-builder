@@ -3,7 +3,8 @@
 //! ```text
 //! facing N: bike-lane | apron | lane S x2 | margin 3 | lane N x2 | apron | bike-lane
 //! ```
-//! Items are separated by `|` or `,`. An item is an element name (or alias) with optional pieces in any order: a direction
+//! In right-hand traffic, facing along the line the lane on the right goes the way the line goes (`fwd`) and the lane on the left comes toward you
+//! (`back`): a two-lane road is `lane back | lane fwd`. Items are separated by `|` or `,`. An item is an element name (or alias) with optional pieces in any order: a direction
 //! (`N S E W`, or `fwd`/`back`), a width (`3`, `3m`, `10ft`), and a repeat (`x2`). The list reads left to right as seen facing the
 //! compass direction after `facing` (or facing along the path when that is left out).
 

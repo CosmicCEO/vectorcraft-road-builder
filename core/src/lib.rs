@@ -2,6 +2,7 @@
 
 pub mod abi;
 pub mod builder;
+pub mod crossing;
 pub mod crosssection;
 pub mod export;
 pub mod geom;

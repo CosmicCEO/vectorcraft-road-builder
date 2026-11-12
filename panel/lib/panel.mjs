@@ -1,11 +1,14 @@
 // The panel's brain: follows the selection in VectorCraft, shows the selected road's description, turns words into a proposed
 // change with an agent, and on Draw applies it (Describe Road, then Build Road) without losing the user's selection.
 import { EventEmitter } from "node:events";
-import { editCrossSection, parseCrossSection, parseJunction } from "./cli.mjs";
-import { PLUGIN_ID, SET_CROSS_SECTION, SET_JUNCTION, allPaths, classify, inspectState, nodes, readSpec } from "./doc.mjs";
-import { propose as proposeWith, proposeJunction } from "./providers.mjs";
+import { editCrossSection, parseCrossSection, parseCrossing, parseJunction } from "./cli.mjs";
+import { PLUGIN_ID, SET_CROSSING, SET_CROSS_SECTION, SET_JUNCTION, allPaths, classify, inspectState, junctionId, nodes, readSpec, segmentId } from "./doc.mjs";
+import { organise, unlockOurs } from "./layers.mjs";
+import { propose as proposeWith, proposeCrossing, proposeJunction } from "./providers.mjs";
 
-const DEFAULT_TEXT = "lane fwd | lane back";
+const DEFAULT_TEXT = "lane back | lane fwd";
+const DEFAULT_CROSSING = { treatment: "signal", crosswalks: true, radius: 6, minor: null, over: null, diameter: 40 };
+const NOT_BUILT = "A cloverleaf is not built yet; an overpass is the closest for now.";
 
 export class Panel extends EventEmitter {
   constructor({ control, providers }) {
@@ -13,7 +16,7 @@ export class Panel extends EventEmitter {
     this.control = control;
     this.providers = providers;
     this.provider = providers.default;
-    this.state = { connected: false, error: null, doc: null, selection: [], target: null, road: null, junction: null, mode: "road", pending: null, busy: null, message: null };
+    this.state = { connected: false, error: null, doc: null, selection: [], target: null, road: null, junction: null, crossing: null, mode: "road", pending: null, busy: null, message: null };
     this.last = { revision: null, selection: "" };
     this.spec = null;
     this.queue = Promise.resolve();
@@ -54,7 +57,7 @@ export class Panel extends EventEmitter {
     } catch (e) {
       const noDoc = /no (active )?document/i.test(e.message);
       this.last = { revision: null, selection: "" };
-      return this.#set({ connected: !noDoc && this.control.connected, error: noDoc ? "Open or create a document in VectorCraft." : e.message, doc: null, selection: [], target: null, road: null, junction: null, pending: null });
+      return this.#set({ connected: !noDoc && this.control.connected, error: noDoc ? "Open or create a document in VectorCraft." : e.message, doc: null, selection: [], target: null, road: null, junction: null, crossing: null, pending: null });
     }
     const key = s.selection.join(",");
     const changed = force || key !== this.last.selection || s.revision !== this.last.revision;
@@ -62,10 +65,26 @@ export class Panel extends EventEmitter {
     const selectionChanged = key !== this.last.selection;
     this.last = { revision: s.revision, selection: key };
 
-    const sel = (await nodes(this.control, s.selection)).map((n) => ({ id: n.id, name: n.name ?? "", kind: n.kind, anchors: n.anchors, ...classify(n) }));
+    let sel = (await nodes(this.control, s.selection)).map((n) => ({ id: n.id, name: n.name ?? "", kind: n.kind, anchors: n.anchors, ...classify(n) }));
+    // Clicking anywhere on a built road selects one of its generated shapes. For the panel that means "this road": swap each shape for the
+    // line it was built from (the shape's piece number is the Nth line of that road, in document order).
+    if (sel.some((n) => /-shape$/.test(n.role))) {
+      const paths = await allPaths(this.control);
+      const seen = new Set();
+      const road = (id, piece = 1) => paths.filter((p) => segmentId(p.name) === id)[piece - 1];
+      sel = (await Promise.all(sel.map(async (n) => {
+        if (!/-shape$/.test(n.role)) return [n];
+        let spines = [];
+        if (n.role === "road-shape") spines = [road(n.segment, n.piece)];
+        else if (n.role === "junction-shape") spines = [paths.find((p) => junctionId(p.name) === n.segment)];
+        else spines = ((this.spec = await readSpec(this.control)).crossings?.[n.segment]?.roads ?? []).map((r) => road(r));
+        return spines.filter((p) => p && !seen.has(p.id)).map((p) => (seen.add(p.id), { id: p.id, name: p.name, kind: "Path", role: junctionId(p.name) ? "junction" : "road", segment: segmentId(p.name) ?? junctionId(p.name), viaShape: true }));
+      }))).flat();
+    }
     const segments = [...new Set(sel.filter((n) => n.role === "road").map((n) => n.segment))];
     let target = null;
     if (segments.length === 1 && sel.every((n) => n.role === "road")) target = { kind: "road", segment: segments[0], ids: sel.map((n) => n.id) };
+    else if (segments.length === 2 && sel.every((n) => n.role === "road")) target = { kind: "crossing", roads: [...segments].sort(), ids: sel.map((n) => n.id) };
     else if (sel.every((n) => n.role === "junction") && sel.length && new Set(sel.map((n) => n.segment)).size === 1) target = { kind: "junction", segment: sel[0].segment, ids: sel.map((n) => n.id) };
     else if (sel.length === 1 && sel[0].role === "line") target = { kind: "line", ids: [sel[0].id] };
     else if (sel.length) target = { kind: "other", ids: sel.map((n) => n.id) };
@@ -85,9 +104,17 @@ export class Panel extends EventEmitter {
       const parsed = stored ? await parseJunction(JSON.stringify(stored)) : null;
       junction = { id: target.segment, described: !!stored, spec: parsed?.ok ? parsed.junction : { legs: [], control: "none", crosswalks: false, radius: 6, kind: "match" }, summary: parsed?.ok ? parsed.summary : "road carried across the gap (not described yet)" };
     }
+    let crossing = null;
+    if (target?.kind === "crossing") {
+      this.spec = await readSpec(this.control);
+      const [a, b] = target.roads;
+      const stored = Object.entries(this.spec.crossings ?? {}).find(([, c]) => c.roads?.length === 2 && c.roads.includes(a) && c.roads.includes(b));
+      const parsed = await parseCrossing(JSON.stringify({ ...(stored?.[1] ?? DEFAULT_CROSSING), roads: [a, b] }));
+      crossing = { id: stored?.[0] ?? null, roads: [a, b], described: !!stored, spec: parsed.ok ? parsed.crossing : { ...DEFAULT_CROSSING, roads: [a, b] }, summary: parsed.ok ? parsed.summary : "" };
+    }
     // A proposal belongs to what was selected when it was made.
     const keep = this.state.pending && !selectionChanged;
-    this.#set({ connected: true, error: null, doc: { title: s.title, revision: s.revision }, selection: sel, target, road, junction, pending: keep ? this.state.pending : null, message: keep ? this.state.message : null });
+    this.#set({ connected: true, error: null, doc: { title: s.title, revision: s.revision }, selection: sel, target, road, junction, crossing, pending: keep ? this.state.pending : null, message: keep ? this.state.message : null });
   }
 
   /** Words to a proposed cross-section (not applied until Draw). */
@@ -99,6 +126,11 @@ export class Panel extends EventEmitter {
       if (!provider) return this.#set({ message: `Unknown agent "${providerId}".` });
       this.#set({ busy: "thinking", message: null });
       try {
+        if (t.kind === "crossing") {
+          const c = this.state.crossing;
+          const r = await proposeCrossing({ description, current: c?.described ? c.spec : null, roads: c.roads, provider });
+          return this.#set(r.ok ? { pending: { kind: "crossing", crossing: r.crossing, summary: r.summary, source: "agent", agent: providerId ?? this.provider, description }, message: null } : { message: r.error });
+        }
         const asJunction = t.kind === "junction" || (t.kind === "line" && this.state.mode === "connection");
         if (asJunction) {
           const j = this.state.junction;
@@ -135,6 +167,17 @@ export class Panel extends EventEmitter {
     });
   }
 
+  /** Puts the road's (or junction's) own line in VectorCraft's selection, ready to move, reshape or delete. */
+  selectLine() {
+    return this.#serial(async () => {
+      const t = this.state.target;
+      if (!t || (t.kind !== "road" && t.kind !== "junction")) return this.#set({ message: "Select a road or a junction first." });
+      await this.control.run("select.set", { ids: t.ids });
+      await this.#refresh(true);
+      this.#set({ message: "The line is selected in VectorCraft: move or reshape its points to change the road." });
+    });
+  }
+
   /** What a plain line is: a road, or a connection between two roads. */
   setMode(mode) {
     if (mode !== "road" && mode !== "connection") return false;
@@ -163,6 +206,18 @@ export class Panel extends EventEmitter {
     });
   }
 
+  /** Quick choices for the selected crossing: {treatment, crosswalks, radius, minor, over, diameter}. Starts a proposal from the current (or default) description. */
+  editCrossing(patch) {
+    return this.#serial(async () => {
+      const base = this.state.pending?.crossing ?? this.state.crossing?.spec;
+      if (!base || this.state.target?.kind !== "crossing") return this.#set({ message: "Select the two crossing roads first." });
+      const next = { ...base, roads: this.state.crossing.roads };
+      for (const k of ["treatment", "crosswalks", "radius", "minor", "over", "diameter"]) if (patch[k] !== undefined) next[k] = patch[k];
+      const r = await parseCrossing(JSON.stringify(next));
+      this.#set(r.ok ? { pending: { kind: "crossing", crossing: r.crossing, summary: r.summary, source: "edit" }, message: r.crossing.treatment === "cloverleaf" ? NOT_BUILT : null } : { message: r.error });
+    });
+  }
+
   cancel() {
     return this.#serial(async () => this.#set({ pending: null, message: null }));
   }
@@ -175,7 +230,12 @@ export class Panel extends EventEmitter {
       if (!t || t.kind === "other") return this.#set({ message: "Select one line (or one road) first." });
       this.#set({ busy: "drawing", message: null });
       try {
-        if (pending?.kind === "junction") {
+        if (t.kind === "crossing") {
+          const spec = pending?.kind === "crossing" ? pending.crossing : this.state.crossing.spec;
+          if (spec.treatment === "cloverleaf") throw new Error(NOT_BUILT);
+          await this.control.run("select.set", { ids: t.ids });
+          await this.control.run(SET_CROSSING, { params: { description: JSON.stringify(spec) } });
+        } else if (pending?.kind === "junction") {
           await this.control.run("select.set", { ids: t.ids });
           await this.control.run(SET_JUNCTION, { params: { description: JSON.stringify(pending.junction) } });
         } else if (pending) {
@@ -185,7 +245,7 @@ export class Panel extends EventEmitter {
           await this.control.run(SET_CROSS_SECTION, { params });
         }
         await this.#build(t.ids);
-        this.#set({ pending: null, message: pending ? "Drawn." : "Rebuilt." });
+        this.#set({ pending: null, message: pending || t.kind === "crossing" ? "Drawn." : "Rebuilt." });
       } catch (e) {
         this.#set({ message: `Could not draw: ${e.message}` });
       } finally {
@@ -195,9 +255,17 @@ export class Panel extends EventEmitter {
     });
   }
 
+  /** Rebuilds every road. Our layers are shown and unlocked for the build (a hidden spine would make its road vanish), the built shapes are
+   *  sorted back into each road's layers, and the user's hiding and locking is put back. */
   async #build(restoreIds) {
-    await this.control.run("select.all");
-    await this.control.run("plugin.run", { id: PLUGIN_ID });
+    const restore = await unlockOurs(this.control);
+    try {
+      await this.control.run("select.all");
+      await this.control.run("plugin.run", { id: PLUGIN_ID });
+      await organise(this.control);
+    } finally {
+      await restore();
+    }
     await this.control.run("select.set", { ids: restoreIds });
   }
 

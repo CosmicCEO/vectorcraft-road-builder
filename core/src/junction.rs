@@ -3,7 +3,7 @@
 //! crosswalks, stop bars and a traffic signal or stop signs.
 //!
 //! Stored in the document's plug-in data under `junctions.<id>`:
-//! `{"legs": [{"side": "left", "cross_section": "lane fwd | lane back", "length": 40}], "control": "signal", "crosswalks": true, "radius": 6}`
+//! `{"legs": [{"side": "left", "cross_section": "lane back | lane fwd", "length": 40}], "control": "signal", "crosswalks": true, "radius": 6}`
 //! No legs means "match and continue": the line is just the road carried across the gap.
 
 use crate::crosssection::{Anchor, Dir, Placed, format, layout, parse};
@@ -55,6 +55,24 @@ impl Default for JunctionSpec {
     }
 }
 
+/// `none`, `signal` (traffic lights) or `stop` (stop signs), with the usual spellings.
+pub(crate) fn parse_control(word: &str) -> Result<Control, String> {
+    match word.trim().to_ascii_lowercase().as_str() {
+        "none" | "" | "uncontrolled" => Ok(Control::None),
+        "signal" | "signals" | "traffic-light" | "traffic-lights" | "lights" => Ok(Control::Signal),
+        "stop" | "stop-sign" | "stop-signs" => Ok(Control::Stop),
+        other => Err(format!("control must be none, signal or stop (got \"{other}\")")),
+    }
+}
+
+pub(crate) fn control_name(c: Control) -> &'static str {
+    match c {
+        Control::None => "none",
+        Control::Signal => "signal",
+        Control::Stop => "stop",
+    }
+}
+
 const SIDES: [&str; 8] = ["left", "right", "west", "east", "north", "south", "w", "e"];
 
 impl JunctionSpec {
@@ -93,12 +111,7 @@ impl JunctionSpec {
                 return Err("both legs are on the same side: a junction has one leg on each side".into());
             }
         }
-        spec.control = match v["control"].as_str().unwrap_or("none").to_ascii_lowercase().as_str() {
-            "none" | "" | "uncontrolled" => Control::None,
-            "signal" | "signals" | "traffic-light" | "traffic-lights" | "lights" => Control::Signal,
-            "stop" | "stop-sign" | "stop-signs" => Control::Stop,
-            other => return Err(format!("control must be none, signal or stop (got \"{other}\")")),
-        };
+        spec.control = parse_control(v["control"].as_str().unwrap_or("none"))?;
         spec.crosswalks = v["crosswalks"].as_bool().unwrap_or(false);
         spec.radius = v["radius"].as_f64().unwrap_or(6.0).clamp(0.0, 20.0);
         Ok(spec)
@@ -108,7 +121,7 @@ impl JunctionSpec {
         json!({
             "kind": self.kind(),
             "legs": self.legs.iter().map(|l| json!({"side": l.side, "cross_section": l.cross_section, "length": l.length})).collect::<Vec<_>>(),
-            "control": match self.control { Control::None => "none", Control::Signal => "signal", Control::Stop => "stop" },
+            "control": control_name(self.control),
             "crosswalks": self.crosswalks,
             "radius": self.radius,
         })
@@ -128,11 +141,11 @@ impl Frame {
     }
 }
 
-fn polygon(n: usize, centre: P, radius: f64) -> Vec<P> {
+pub(crate) fn polygon(n: usize, centre: P, radius: f64) -> Vec<P> {
     (0..n).map(|k| { let a = std::f64::consts::TAU * (k as f64 + 0.5) / n as f64; [centre[0] + radius * a.cos(), centre[1] + radius * a.sin()] }).collect()
 }
 
-fn travel(e: &Placed) -> bool {
+pub(crate) fn travel(e: &Placed) -> bool {
     matches!(e.role, Role::Travel | Role::Pocket)
 }
 
@@ -328,7 +341,9 @@ pub fn build(items: &[Item], spec: &Spec, out: &mut Out) -> Vec<String> {
                 let vs: Vec<f64> = lanes.iter().flat_map(|e| [to_v(e.left), to_v(e.right)]).collect();
                 let (v0, v1) = (vs.iter().cloned().fold(f64::INFINITY, f64::min), vs.iter().cloned().fold(f64::NEG_INFINITY, f64::max));
                 out.path(&format!("{base}.stop.leg.{}", k + 1), &[vec![fr.at(ub, v0), fr.at(ub, v1)]], flip, WHITE, 0.6, false);
-                let c = fr.at(ub + l.su * 0.9, l.su * (l.width / 2.0 + 0.9));
+                // The sign or signal stands just beyond the inbound lanes on the driver's right-hand side, on the same side as the bar.
+                let pole_v = if l.su > 0.0 { v1 + 0.9 } else { v0 - 0.9 };
+                let c = fr.at(ub + l.su * 0.9, pole_v);
                 if jspec.control == Control::Stop {
                     out.polygon(&format!("{base}.sign.leg.{}", k + 1), &polygon(8, c, 0.75), flip, [0.8, 0.12, 0.12]);
                 } else {
