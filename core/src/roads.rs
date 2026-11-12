@@ -234,10 +234,15 @@ pub(crate) fn emit(out: &mut Out, base: &str, path: &[P], placed: &[Placed]) {
 
 /// Builds every `road.*` line in `items`. Returns notes for the user (things guessed or skipped).
 pub fn build(items: &[Item], spec: &Spec, out: &mut Out) -> Vec<String> {
+    build_clipped(items, spec, &[], out)
+}
+
+/// `build`, with the parts of road pieces that crossings trim away left out (the lines in the document are not changed).
+pub fn build_clipped(items: &[Item], spec: &Spec, trims: &[crate::crossing::Trim], out: &mut Out) -> Vec<String> {
     let mut notes = Vec::new();
     let mut pieces: BTreeMap<String, usize> = BTreeMap::new();
     let mut resolved: BTreeMap<String, (Parsed, Anchor)> = BTreeMap::new();
-    for it in items {
+    for (index, it) in items.iter().enumerate() {
         let Some(id) = segment_id(&it.name) else { continue };
         let Some(sub) = it.subs.first() else { continue };
         let path: Vec<P> = sub.iter().map(|&p| flip(p)).collect();
@@ -263,7 +268,9 @@ pub fn build(items: &[Item], spec: &Spec, out: &mut Out) -> Vec<String> {
         let piece = pieces.entry(id.clone()).and_modify(|n| *n += 1).or_insert(1);
         let base = format!("gen.road.{id}.{piece}");
 
-        emit(out, &base, &path, &placed);
+        // The elements are laid out for the whole line; only the drawing is cut short.
+        let drawn = trims.iter().filter(|t| t.index == index).fold(path.clone(), |p, t| crate::crossing::clip(&p, t));
+        emit(out, &base, &drawn, &placed);
         let _ = Dir::Fwd; // directions are resolved in the layout; arrows come with the junction work
     }
     notes

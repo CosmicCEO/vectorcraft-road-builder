@@ -83,18 +83,23 @@ export function extractJson(reply) {
 export function crossingSystemPrompt() {
   return `You turn a plain-language description of how two crossing roads meet into one JSON object. Reply with the JSON object only: no explanation, no code fence.
 
-{"treatment": "signal|two-way-stop|four-way-stop|uncontrolled|overpass|roundabout|cloverleaf", "crosswalks": false, "radius": 6, "minor": null, "over": null, "diameter": 40}
+{"treatment": "signal|two-way-stop|four-way-stop|uncontrolled|overpass|roundabout|cloverleaf", "crosswalks": false, "radius": 6, "minor": null, "over": null, "diameter": 40, "stub": "keep"}
 - treatment: "signal" = lighted intersection (traffic lights); "two-way-stop" = stop signs on the minor road only; "four-way-stop" = stop signs on every approach; "uncontrolled" = nothing painted or posted; "overpass" = one road bridges the other (an underpass is the same thing seen from the road below: the road on top is "over"); "roundabout" = traffic circle; "cloverleaf" = interchange with loop ramps.
 - crosswalks: true if the description mentions crosswalks, cross walks or pedestrian crossings.
 - radius: kerb corner radius in metres (default 6).
 - minor: for a two-way stop, the id of the road that stops. Use null if the description does not say, and the narrower road will stop.
 - over: for an overpass, the id of the road that goes over. Use null if not said.
 - diameter: for a roundabout, the outside diameter in metres (default 40).
+- stub: if one road runs only a short way past the crossing, "keep" draws that short end as a dead end (a four-way intersection) and "trim" cuts it off at the other road (a three-way, T intersection). Default "keep". Use "trim" when the description says to trim, cut off or remove the stub, or asks for a three-way or T intersection.
 The two roads have the ids given in the request; "minor" and "over" must be one of those two ids or null. Leave out "roads": the program adds it.
 
 EXAMPLE
 Description: lighted intersection with crosswalks
-{"treatment": "signal", "crosswalks": true, "radius": 6, "minor": null, "over": null, "diameter": 40}
+{"treatment": "signal", "crosswalks": true, "radius": 6, "minor": null, "over": null, "diameter": 40, "stub": "keep"}
+
+EXAMPLE
+Description: lighted three-way, trim off the little stub
+{"treatment": "signal", "crosswalks": true, "radius": 6, "minor": null, "over": null, "diameter": 40, "stub": "trim"}
 
 EDITING
 When a current intersection is given, apply the requested change and return the COMPLETE updated object, keeping everything not mentioned exactly as it was.`;

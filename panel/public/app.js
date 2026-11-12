@@ -108,6 +108,8 @@ function show(s) {
     $("cminorRow").hidden = cv.spec.treatment !== "two-way-stop";
     $("coverRow").hidden = cv.spec.treatment !== "overpass";
     $("cdiaRow").hidden = cv.spec.treatment !== "roundabout";
+    $("cstubRow").hidden = !["signal", "two-way-stop", "four-way-stop", "uncontrolled"].includes(cv.spec.treatment);
+    $("cstub").value = cv.spec.stub ?? "keep";
     if (document.activeElement !== $("cdia")) $("cdia").value = cv.spec.diameter ?? 40;
     $("ccancel").hidden = !cv.proposed;
   }
@@ -174,6 +176,7 @@ $("ctreat").onchange = () => cpatch({ treatment: $("ctreat").value });
 $("ccross").onchange = () => cpatch({ crosswalks: $("ccross").checked });
 $("cminor").onchange = () => cpatch({ minor: $("cminor").value || null });
 $("cover").onchange = () => cpatch({ over: $("cover").value || null });
+$("cstub").onchange = () => cpatch({ stub: $("cstub").value });
 $("cdia").onchange = () => cpatch({ diameter: Number($("cdia").value) || 40 });
 $("match").onclick = () => act("match");
 for (const r of document.querySelectorAll("input[name=mode]")) r.onchange = () => act("mode", { mode: r.value });

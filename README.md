@@ -65,7 +65,10 @@ Draw one road across another, select both, and the panel offers **Make an inters
 lighted intersection, two-way stop (the narrower road stops unless you name one), four-way stop, no control, overpass/underpass (one
 road bridges the other, with parapets and abutments), roundabout (counter-clockwise ring, splitter islands, yield lines). Crosswalks are
 optional. Any angle works (the paved box is a parallelogram; kerb corners are true arcs), and each road can curve: the local direction at
-the crossing is used. Cloverleaf is listed but not built yet. Stored as `crossings.<id>` (`treatment`, `crosswalks`, `radius`, `minor`,
+the crossing is used. Cloverleaf is listed but not built yet.
+If one road runs only a short way past the crossing (under 25 m from the centre, adjustable as `stub_length`) you choose what to do with
+that **stub**: *keep it as a dead end* (a four-way with a kerbed end) or *trim it off* (a three-way: the built road stops at the other road's
+travel lane, which keeps its far kerb, bike lane and verge). Your drawn line is never cut, only what is built from it. Stored as `crossings.<id>` (`treatment`, `crosswalks`, `radius`, `minor`,
 `over`, `diameter`); menu command **Make Intersection**; `road-builder-cli parse-crossing`.
 
 ## One layer per road (new in 0.4)

@@ -146,7 +146,8 @@ pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
         }
     }
     if has_road {
-        roads::build(&items, &spec, &mut out);
+        let trims = crossing::trims(&items, &spec);
+        roads::build_clipped(&items, &spec, &trims, &mut out);
         junction::build(&items, &spec, &mut out); // junctions are drawn over the roads they join
         crossing::build(&items, &spec, &mut out); // and so are intersections where two roads cross
     }

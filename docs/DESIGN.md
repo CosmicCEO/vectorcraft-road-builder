@@ -130,6 +130,10 @@ the last Ross-Bridge-specific names from the core. Junction templates, part-way 
   `layer.new` without `top` nests inside a current sublayer. Limit: layers stack per road, so a later road's drawing covers an earlier road's
   spine where they cross (use "Select the line").
 
+- Stubs: `stub` keep|trim and `stub_length` on a crossing. `crossing::trims` runs before roads are built and `roads::build_clipped` cuts the
+  drawn road at the nearer far corner of the box; `bounds` stops the through road's paving at its outer travel lane on that side; kerb returns,
+  crosswalks, stop bars and signals are skipped for the missing arm. Kept stubs get a kerb across their end. 6 native tests, 2 panel tests.
+
 ## Verification at each phase
 Native unit tests for the core; the real VectorCraft engine via `scripts/roundtrip.sh` and the MCP loop (`scripts/mcp-smoke.mjs`);
 a visual check by screenshot against the story, step by step.

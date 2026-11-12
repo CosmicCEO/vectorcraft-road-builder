@@ -63,6 +63,14 @@
       <label id="cdiaRow" hidden>Width <input id="cdia" type="number" min="20" max="120" step="2" value="40"> m</label>
       <label id="ccrossRow"><input type="checkbox" id="ccross"> Crosswalks</label>
     </div>
+    <div class="row wrap" id="cstubRow">
+      <label>A short stub past the crossing
+        <select id="cstub">
+          <option value="keep">Keep it as a dead end (four-way)</option>
+          <option value="trim">Trim it off (three-way)</option>
+        </select>
+      </label>
+    </div>
     <div class="row"><button id="ccancel" class="plain" hidden>Cancel</button></div>
   </section>
 

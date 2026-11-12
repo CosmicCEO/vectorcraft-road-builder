@@ -284,3 +284,91 @@ fn the_median_ends_short_of_the_crosswalk_with_a_nose() {
     let (_, hi) = bbox(&pts(&out, "gen.crossing.k1.cap.a.before.1"));
     assert!((hi[1] - 404.6).abs() < 1e-3, "{hi:?}");
 }
+
+// A road that runs only 15 m past the crossing: road b ends at x = 215, road a runs on both sides.
+fn stubbed() -> Vec<Item> {
+    items(&[[-100.0, 400.0], [215.0, 400.0]])
+}
+
+fn with_stub(word: &str) -> Spec {
+    let mut c = signals();
+    c["stub"] = json!(word);
+    spec(c)
+}
+
+#[test]
+fn a_kept_stub_is_a_dead_end_with_a_kerb_across_its_end() {
+    let (out, notes) = run(&stubbed(), &with_stub("keep"));
+    assert!(notes.is_empty(), "{notes:?}");
+    let n = names(&out);
+    for want in ["deadend.b.after", "crosswalk.b.after", "stop.b.before", "kerb.1", "kerb.2", "kerb.3", "kerb.4"] {
+        assert!(n.iter().any(|x| *x == format!("gen.crossing.k1.{want}")), "missing {want}; have {n:?}");
+    }
+    let end = pts(&out, "gen.crossing.k1.deadend.b.after");
+    let (lo, hi) = bbox(&end);
+    assert!((lo[0] - 215.0).abs() < 1e-3 && (hi[0] - 215.0).abs() < 1e-3 && (lo[1] - 396.4).abs() < 1e-3 && (hi[1] - 403.6).abs() < 1e-3, "the kerb closes the road's end: {lo:?} {hi:?}");
+    assert!(!n.iter().any(|x| x.contains("deadend.a.") || x.contains("deadend.b.before")), "only the short end is capped: {n:?}");
+    // Long roads have no stub and no dead end.
+    assert!(!names(&run(&across(), &with_stub("keep")).0).iter().any(|x| x.contains("deadend")));
+}
+
+#[test]
+fn a_trimmed_stub_makes_a_three_way_with_the_far_kerb_kept() {
+    let (out, notes) = run(&stubbed(), &with_stub("trim"));
+    assert!(notes.is_empty(), "{notes:?}");
+    let n = names(&out);
+    assert!(!n.iter().any(|x| x.contains(".b.after") || x.contains("deadend")), "nothing is drawn for the trimmed arm: {n:?}");
+    for want in ["crosswalk.b.before", "stop.b.before", "crosswalk.a.before", "crosswalk.a.after", "kerb.1", "kerb.4"] {
+        assert!(n.iter().any(|x| *x == format!("gen.crossing.k1.{want}")), "missing {want}; have {n:?}");
+    }
+    assert!(!n.iter().any(|x| x == "gen.crossing.k1.kerb.2" || x == "gen.crossing.k1.kerb.3"), "no kerb returns on the side where road b was trimmed: {n:?}");
+    // Road a's east travel lanes end at x = 208.7 (1.5 + 2 x 3.6 m from its middle); its apron and bike lane beyond are not paved over.
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.box"));
+    assert!((lo[0] - 188.95).abs() < 0.01 && (hi[0] - 208.95).abs() < 0.01, "{lo:?} {hi:?}");
+}
+
+#[test]
+fn trimming_cuts_the_built_road_but_not_the_line() {
+    let items = stubbed();
+    let sp = with_stub("trim");
+    let trims = crossing::trims(&items, &sp);
+    assert_eq!(trims.len(), 1);
+    assert_eq!((trims[0].index, trims[0].sign), (1, 1.0));
+    assert!((trims[0].dist - 8.7).abs() < 1e-3, "cut where road a's travel lanes end: {}", trims[0].dist);
+    let mut out = Out::new();
+    road_builder_core::roads::build_clipped(&items, &sp, &trims, &mut out);
+    let v: Value = serde_json::from_str(&out.finish()).unwrap();
+    let (lo, hi) = bbox(&pts(&v, "gen.road.b.1.surface.0.lane"));
+    assert!((lo[0] + 100.0).abs() < 1e-3 && (hi[0] - 208.7).abs() < 0.01, "road b's drawing now stops at the through road's travel lane: {lo:?} {hi:?}");
+    // Without trims it runs the whole line.
+    let mut full = Out::new();
+    road_builder_core::roads::build(&items, &sp, &mut full);
+    let v: Value = serde_json::from_str(&full.finish()).unwrap();
+    assert!((bbox(&pts(&v, "gen.road.b.1.surface.0.lane")).1[0] - 215.0).abs() < 0.01);
+    assert_eq!(items[1].subs[0][1], [215.0, 400.0], "the document's line is untouched");
+    // Keep, or an overpass, trims nothing.
+    assert!(crossing::trims(&items, &with_stub("keep")).is_empty());
+}
+
+#[test]
+fn trimming_with_nothing_to_trim_says_so_and_changes_nothing() {
+    let (out, notes) = run(&across(), &with_stub("trim"));
+    assert!(notes.iter().any(|n| n.contains("no stub to trim")), "{notes:?}");
+    assert!(names(&out).iter().any(|n| n == "gen.crossing.k1.crosswalk.b.after"), "a four-way is drawn as usual");
+    assert!(crossing::trims(&across(), &with_stub("trim")).is_empty());
+}
+
+#[test]
+fn stub_words_are_read_and_checked() {
+    let word = |w: &str| CrossingSpec::from_json(&json!({"roads": ["a", "b"], "stub": w})).map(|c| c.stub);
+    use road_builder_core::crossing::Stub;
+    for w in ["trim", "3-way", "tee", "cut"] {
+        assert_eq!(word(w).unwrap(), Stub::Trim, "{w}");
+    }
+    for w in ["keep", "dead end", "4-way", ""] {
+        assert_eq!(word(w).unwrap(), Stub::Keep, "{w}");
+    }
+    assert!(word("fold").unwrap_err().contains("stub must be keep or trim"));
+    assert!(CrossingSpec::from_json(&json!({"roads": ["a", "b"], "stub": "trim"})).unwrap().summary().contains("short stub is trimmed (three-way)"));
+    assert_eq!(CrossingSpec::from_json(&json!({"roads": ["a", "b"], "stub_length": 500})).unwrap().stub_length, 100.0);
+}

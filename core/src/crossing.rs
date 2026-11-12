@@ -6,6 +6,9 @@
 //!
 //! Stored in the document's plug-in data under `crossings.<id>`:
 //! `{"roads": ["a", "b"], "treatment": "signal", "crosswalks": true, "radius": 6, "minor": "b", "over": "a", "diameter": 40}`
+//! `"stub": "keep"|"trim"`, `"stub_length": 25`: a road that runs only a short way past the crossing (under `stub_length` metres from the crossing
+//! centre) is a stub. `keep` (default) draws it as a dead end, making a four-way; `trim` stops the built road at the other road's travel lane, making
+//! a three-way. The drawn line is never changed: only what is built from it.
 //! (`minor` for a two-way stop, `over` for an overpass, `diameter` for a roundabout). The older `control` field (none, signal, stop) still reads.
 //! Shortcut: the first crossing of the two roads is used; finding it tests every pair of segments, fine for hand-drawn roads.
 
@@ -74,6 +77,18 @@ pub struct CrossingSpec {
     pub over: Option<String>,
     /// For a roundabout: the outer diameter in metres.
     pub diameter: f64,
+    /// What to do with a short stub of road past the crossing.
+    pub stub: Stub,
+    /// A side of a road shorter than this many metres, measured from the crossing centre, is a stub.
+    pub stub_length: f64,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Stub {
+    /// Draw it as a dead end: a four-way intersection with one short arm.
+    Keep,
+    /// Stop the built road at the other road: a three-way intersection.
+    Trim,
 }
 
 fn clean_id(s: &str) -> String {
@@ -112,11 +127,17 @@ impl CrossingSpec {
             minor,
             over,
             diameter: v["diameter"].as_f64().unwrap_or(40.0).clamp(20.0, 120.0),
+            stub: match v["stub"].as_str().map(|w| w.trim().to_ascii_lowercase().replace([' ', '_'], "-")).as_deref() {
+                None | Some("") | Some("keep") | Some("dead-end") | Some("deadend") | Some("4-way") | Some("four-way") => Stub::Keep,
+                Some("trim") | Some("cut") | Some("3-way") | Some("three-way") | Some("tee") | Some("t") => Stub::Trim,
+                Some(other) => return Err(format!("stub must be keep or trim (got \"{other}\")")),
+            },
+            stub_length: v["stub_length"].as_f64().unwrap_or(25.0).clamp(5.0, 100.0),
         })
     }
 
     pub fn to_json(&self) -> Value {
-        json!({"roads": self.roads, "treatment": self.treatment.name(), "crosswalks": self.crosswalks, "radius": self.radius, "minor": self.minor, "over": self.over, "diameter": self.diameter})
+        json!({"roads": self.roads, "treatment": self.treatment.name(), "crosswalks": self.crosswalks, "radius": self.radius, "minor": self.minor, "over": self.over, "diameter": self.diameter, "stub": if self.stub == Stub::Trim { "trim" } else { "keep" }, "stub_length": self.stub_length})
     }
 
     pub fn summary(&self) -> String {
@@ -134,7 +155,8 @@ impl CrossingSpec {
             Treatment::Cloverleaf => "cloverleaf interchange (not built yet)".to_string(),
         };
         let walks = if self.crosswalks && !matches!(self.treatment, Treatment::Overpass | Treatment::Cloverleaf) { ", crosswalks" } else { "" };
-        format!("roads {a} and {b}: {what}{walks}")
+        let stub = if self.stub == Stub::Trim && !matches!(self.treatment, Treatment::Overpass | Treatment::Roundabout | Treatment::Cloverleaf) { ", a short stub is trimmed (three-way)" } else { "" };
+        format!("roads {a} and {b}: {what}{walks}{stub}")
     }
 }
 
@@ -145,6 +167,9 @@ pub struct Crossing {
     pub tb: P,
     pub path_a: Vec<P>,
     pub path_b: Vec<P>,
+    /// Which items (by position) the two pieces are, so a trim can find them again.
+    pub index_a: usize,
+    pub index_b: usize,
 }
 
 fn cross2(a: P, b: P) -> f64 {
@@ -156,14 +181,14 @@ fn unit(v: P) -> P {
     [v[0] / m, v[1] / m]
 }
 
-fn pieces(items: &[Item], road: &str) -> Vec<Vec<P>> {
-    items.iter().filter(|i| segment_id(&i.name).as_deref() == Some(road)).filter_map(|i| i.subs.first()).map(|s| s.iter().map(|&p| flip(p)).collect()).collect()
+fn pieces(items: &[Item], road: &str) -> Vec<(usize, Vec<P>)> {
+    items.iter().enumerate().filter(|(_, i)| segment_id(&i.name).as_deref() == Some(road)).filter_map(|(k, i)| i.subs.first().map(|s| (k, s.iter().map(|&p| flip(p)).collect()))).collect()
 }
 
 /// The first place road `a` crosses road `b` (the lines as drawn, curves already flattened), if they cross at all.
 pub fn find(items: &[Item], a: &str, b: &str) -> Option<Crossing> {
-    for pa in pieces(items, a) {
-        for pb in pieces(items, b) {
+    for (ia, pa) in pieces(items, a) {
+        for (ib, pb) in pieces(items, b) {
             for wa in pa.windows(2) {
                 for wb in pb.windows(2) {
                     let (r, s) = (sub(wa[1], wa[0]), sub(wb[1], wb[0]));
@@ -174,7 +199,7 @@ pub fn find(items: &[Item], a: &str, b: &str) -> Option<Crossing> {
                     let q = sub(wb[0], wa[0]);
                     let (t, u) = (cross2(q, s) / den, cross2(q, r) / den);
                     if (0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u) {
-                        return Some(Crossing { p: add(wa[0], scale(r, t)), ta: unit(r), tb: unit(s), path_a: pa.clone(), path_b: pb.clone() });
+                        return Some(Crossing { p: add(wa[0], scale(r, t)), ta: unit(r), tb: unit(s), path_a: pa.clone(), path_b: pb.clone(), index_a: ia, index_b: ib });
                     }
                 }
             }
@@ -223,8 +248,10 @@ pub fn build(items: &[Item], spec: &Spec, out: &mut Out) -> Vec<String> {
     for (id, v) in spec.crossings() {
         match CrossingSpec::from_json(&v) {
             Ok(cs) => {
-                if let Err(e) = emit(items, spec, &id, &cs, out) {
-                    notes.push(format!("intersection {id}: {e}"));
+                match emit(items, spec, &id, &cs, out) {
+                    Ok(Some(n)) => notes.push(format!("intersection {id}: {n}")),
+                    Ok(None) => {}
+                    Err(e) => notes.push(format!("intersection {id}: {e}")),
                 }
             }
             Err(e) => notes.push(format!("intersection {id}: {e}")),
@@ -233,27 +260,145 @@ pub fn build(items: &[Item], spec: &Spec, out: &mut Out) -> Vec<String> {
     notes
 }
 
-fn emit(items: &[Item], spec: &Spec, id: &str, cs: &CrossingSpec, out: &mut Out) -> Result<(), String> {
-    let x = find(items, &cs.roads[0], &cs.roads[1]).ok_or_else(|| format!("roads {} and {} do not cross", cs.roads[0], cs.roads[1]))?;
-    let lib = &spec.library;
+/// Lays out the two roads at the crossing: direction, sideways frame and the elements across each.
+fn make_arms(spec: &Spec, cs: &CrossingSpec, x: &Crossing) -> Result<Vec<Arm>, String> {
     let mut arms: Vec<Arm> = Vec::new();
     for (road, t, path) in [(&cs.roads[0], x.ta, &x.path_a), (&cs.roads[1], x.tb, &x.path_b)] {
         let (parsed, anchor, _) = spec.for_segment(road);
-        let placed = layout(&parsed, lib, heading(path), anchor)?;
+        let placed = layout(&parsed, &spec.library, heading(path), anchor)?;
         let (lo, hi) = (placed.first().map_or(-3.0, |e| e.left), placed.last().map_or(3.0, |e| e.right));
         arms.push(Arm { id: road.clone(), t, n: Poly::right(t), lo, hi, placed });
     }
     if cross2(arms[0].n, arms[1].n).abs() < 0.17 {
         return Err("the roads are nearly parallel, so they do not form an intersection".into());
     }
+    Ok(arms)
+}
+
+fn at_grade_treatment(t: Treatment) -> bool {
+    matches!(t, Treatment::Uncontrolled | Treatment::Signal | Treatment::TwoWayStop | Treatment::FourWayStop)
+}
+
+/// The short sides: `(arm, sign)` where the road runs less than `stub_length` past the crossing centre (sign -1 is the part before the
+/// crossing, +1 the part after). A road with a short side on both ends is a short road, not a stub, and is left alone.
+fn stub_sides(x: &Crossing, cs: &CrossingSpec) -> Vec<(usize, f64)> {
+    let mut sides = Vec::new();
+    for (k, path) in [&x.path_a, &x.path_b].into_iter().enumerate() {
+        let poly = Poly::new(path.clone());
+        let (s0, _, _) = poly.project(x.p);
+        let (before, after) = (s0 < cs.stub_length, poly.len() - s0 < cs.stub_length);
+        match (before, after) {
+            (true, false) => sides.push((k, -1.0)),
+            (false, true) => sides.push((k, 1.0)),
+            _ => {}
+        }
+    }
+    sides
+}
+
+/// Where each road's paved band ends, as `[(lo, hi); 2]` per arm. Normally the road's whole width; where the *other* road is trimmed to a
+/// stub-free end, the paving stops at this road's outer travel lane so its far kerb, bike lane and verge carry on (a three-way keeps them).
+fn bounds(x: &Crossing, arms: &[Arm], trimmed: &[(usize, f64)]) -> [(f64, f64); 2] {
+    let mut b = [(arms[0].lo, arms[0].hi), (arms[1].lo, arms[1].hi)];
+    for &(k, sign) in trimmed {
+        let o = 1 - k;
+        let dir = scale(if k == 0 { x.ta } else { x.tb }, sign);
+        let travels: Vec<&Placed> = arms[o].placed.iter().filter(|e| travel(e)).collect();
+        if travels.is_empty() {
+            continue;
+        }
+        if dot(dir, arms[o].n) > 0.0 {
+            b[o].1 = travels.iter().map(|e| e.right).fold(f64::NEG_INFINITY, f64::max);
+        } else {
+            b[o].0 = travels.iter().map(|e| e.left).fold(f64::INFINITY, f64::min);
+        }
+    }
+    b
+}
+
+/// What a trim does to one road piece: drop the part beyond `dist` metres from `p` on the `sign` side (sign -1 is before `p` along the line).
+pub struct Trim {
+    pub index: usize,
+    pub p: P,
+    pub sign: f64,
+    pub dist: f64,
+}
+
+/// The cuts the stored crossings ask for, to be applied to the roads before they are drawn (see `clip`).
+pub fn trims(items: &[Item], spec: &Spec) -> Vec<Trim> {
+    let mut out = Vec::new();
+    for (_, v) in spec.crossings() {
+        let Ok(cs) = CrossingSpec::from_json(&v) else { continue };
+        if cs.stub != Stub::Trim || !at_grade_treatment(cs.treatment) {
+            continue;
+        }
+        let Some(x) = find(items, &cs.roads[0], &cs.roads[1]) else { continue };
+        let Ok(arms) = make_arms(spec, &cs, &x) else { continue };
+        let sides = stub_sides(&x, &cs);
+        let b = bounds(&x, &arms, &sides);
+        let corners = [(b[0].0, b[1].0), (b[0].1, b[1].0), (b[0].1, b[1].1), (b[0].0, b[1].1)].map(|(ua, ub)| corner_at(&x, &arms, ua, ub));
+        for &(k, sign) in &sides {
+            let dir = scale(if k == 0 { x.ta } else { x.tb }, sign);
+            let mut reach_of: Vec<f64> = corners.iter().map(|&c| dot(dir, sub(c, x.p))).collect();
+            reach_of.sort_by(|p, q| q.total_cmp(p));
+            // The nearer of the two far corners: everything of the stub up to there lies on the other road's pavement or in the box.
+            out.push(Trim { index: if k == 0 { x.index_a } else { x.index_b }, p: x.p, sign, dist: reach_of[1].max(0.0) });
+        }
+    }
+    out
+}
+
+/// The road line with the part a trim drops cut off (the line itself in the document is not touched).
+pub(crate) fn clip(path: &[P], t: &Trim) -> Vec<P> {
+    let poly = Poly::new(path.to_vec());
+    let (s0, _, _) = poly.project(t.p);
+    let len = poly.len();
+    let cut = (s0 + t.sign * t.dist).clamp(0.0, len);
+    let mut cum = vec![0.0];
+    for w in path.windows(2) {
+        cum.push(cum.last().copied().unwrap_or(0.0) + (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]));
+    }
+    let mut kept: Vec<P> = Vec::new();
+    if t.sign > 0.0 {
+        kept.extend(path.iter().zip(&cum).filter(|(_, c)| **c < cut - 1e-6).map(|(p, _)| *p));
+        kept.push(poly.at(cut).0);
+    } else {
+        kept.push(poly.at(cut).0);
+        kept.extend(path.iter().zip(&cum).filter(|(_, c)| **c > cut + 1e-6).map(|(p, _)| *p));
+    }
+    if kept.len() < 2 { path.to_vec() } else { kept }
+}
+
+fn emit(items: &[Item], spec: &Spec, id: &str, cs: &CrossingSpec, out: &mut Out) -> Result<Option<String>, String> {
+    let x = find(items, &cs.roads[0], &cs.roads[1]).ok_or_else(|| format!("roads {} and {} do not cross", cs.roads[0], cs.roads[1]))?;
+    let arms = make_arms(spec, cs, &x)?;
     let base = format!("gen.crossing.{id}");
+    let mut note = None;
     match cs.treatment {
         Treatment::Overpass => overpass(out, &base, cs, &x, &arms),
         Treatment::Roundabout => roundabout(out, &base, cs, &x, &arms),
         Treatment::Cloverleaf => return Err("a cloverleaf interchange is not built yet; use an overpass for now".into()),
-        _ => at_grade(out, &base, cs, &x, &arms),
+        _ => {
+            let stubs = stub_sides(&x, cs);
+            let trimmed: &[(usize, f64)] = if cs.stub == Stub::Trim { &stubs } else { &[] };
+            if cs.stub == Stub::Trim && stubs.is_empty() {
+                note = Some(format!("no stub to trim: both roads run more than {} m past the crossing", cs.stub_length));
+            }
+            at_grade(out, &base, cs, &x, &arms, trimmed);
+            // A stub that is kept ends in a kerb across its end: a dead end.
+            if cs.stub == Stub::Keep {
+                for &(k, sign) in &stubs {
+                    let path = if k == 0 { &x.path_a } else { &x.path_b };
+                    let poly = Poly::new(path.clone());
+                    let (p, t) = poly.at(if sign > 0.0 { poly.len() } else { 0.0 });
+                    let n = Poly::right(t);
+                    let tag = format!("{}.{}", arms[k].id, if sign < 0.0 { "before" } else { "after" });
+                    out.path(&format!("{base}.deadend.{tag}"), &[vec![add(p, scale(n, arms[k].lo)), add(p, scale(n, arms[k].hi))]], flip, CURB, 0.3, false);
+                }
+            }
+        }
     }
-    Ok(())
+    Ok(note)
 }
 
 /// Where a median, margin or verge in the middle of a road ends before an intersection: it is capped just short of the crosswalk (or a metre
@@ -282,18 +427,24 @@ fn reach(corners: &[P; 4], p: P, dir: P) -> f64 {
 }
 
 /// Signals, stop signs or nothing: pave the overlap, round the corners, mark all four approaches.
-fn at_grade(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: &[Arm]) {
+fn at_grade(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: &[Arm], trimmed: &[(usize, f64)]) {
     let (a, b) = (&arms[0], &arms[1]);
-    let corners = [(a.lo, b.lo), (a.hi, b.lo), (a.hi, b.hi), (a.lo, b.hi)].map(|(ua, ub)| corner_at(x, arms, ua, ub));
+    let bd = bounds(x, arms, trimmed);
+    let corners = [(bd[0].0, bd[1].0), (bd[0].1, bd[1].0), (bd[0].1, bd[1].1), (bd[0].0, bd[1].1)].map(|(ua, ub)| corner_at(x, arms, ua, ub));
     let centre = scale(corners.iter().fold([0.0, 0.0], |s, &c| add(s, c)), 0.25);
     // Paved a little beyond the overlap (a quarter metre on every side) so the paving also covers the roads' edge lines where they open onto each other.
     let m = 0.25;
-    let inflated = [(a.lo - m, b.lo - m), (a.hi + m, b.lo - m), (a.hi + m, b.hi + m), (a.lo - m, b.hi + m)].map(|(ua, ub)| corner_at(x, arms, ua, ub));
+    let inflated = [(bd[0].0 - m, bd[1].0 - m), (bd[0].1 + m, bd[1].0 - m), (bd[0].1 + m, bd[1].1 + m), (bd[0].0 - m, bd[1].1 + m)].map(|(ua, ub)| corner_at(x, arms, ua, ub));
     out.polygon(&format!("{base}.box"), &inflated, flip, PAVEMENT);
 
     // Rounded kerb corners: at each corner the two edges leave the box, and the arc rounds the space between them.
     for (k, &c) in corners.iter().enumerate() {
-        let away = |t: P| if dot(t, sub(centre, c)) > 0.0 { scale(t, -1.0) } else { t };
+        let sign_away = |t: P| if dot(t, sub(centre, c)) > 0.0 { -1.0 } else { 1.0 };
+        let away = |t: P| scale(t, sign_away(t));
+        // No kerb return where one of the two roads meeting at this corner has been trimmed away.
+        if trimmed.contains(&(0, sign_away(a.t))) || trimmed.contains(&(1, sign_away(b.t))) {
+            continue;
+        }
         if let Some((arc, fill)) = fillet(c, away(a.t), away(b.t), cs.radius) {
             out.polygon(&format!("{base}.corner.{}", k + 1), &fill, flip, PAVEMENT);
             out.path(&format!("{base}.kerb.{}", k + 1), &[arc], flip, CURB, 0.3, false);
@@ -304,8 +455,11 @@ fn at_grade(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: &[
     let minor = cs.minor.clone().unwrap_or_else(|| if a.hi - a.lo <= b.hi - b.lo { a.id.clone() } else { b.id.clone() });
     let (gap, cw) = (1.0, 3.0);
     let back = if cs.crosswalks { cw + 0.9 } else { 0.6 };
-    for arm in arms {
+    for (k, arm) in arms.iter().enumerate() {
         for sign in [-1.0, 1.0] {
+            if trimmed.contains(&(k, sign)) {
+                continue; // this arm has been trimmed away
+            }
             let dir = scale(arm.t, sign);
             let ext = reach(&corners, x.p, dir);
             let tag = format!("{}.{}", arm.id, if sign < 0.0 { "before" } else { "after" });

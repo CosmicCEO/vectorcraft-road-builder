@@ -7,7 +7,7 @@ import { organise, unlockOurs } from "./layers.mjs";
 import { propose as proposeWith, proposeCrossing, proposeJunction } from "./providers.mjs";
 
 const DEFAULT_TEXT = "lane back | lane fwd";
-const DEFAULT_CROSSING = { treatment: "signal", crosswalks: true, radius: 6, minor: null, over: null, diameter: 40 };
+const DEFAULT_CROSSING = { treatment: "signal", crosswalks: true, radius: 6, minor: null, over: null, diameter: 40, stub: "keep" };
 const NOT_BUILT = "A cloverleaf is not built yet; an overpass is the closest for now.";
 
 export class Panel extends EventEmitter {
@@ -206,13 +206,13 @@ export class Panel extends EventEmitter {
     });
   }
 
-  /** Quick choices for the selected crossing: {treatment, crosswalks, radius, minor, over, diameter}. Starts a proposal from the current (or default) description. */
+  /** Quick choices for the selected crossing: {treatment, crosswalks, radius, minor, over, diameter, stub}. Starts a proposal from the current (or default) description. */
   editCrossing(patch) {
     return this.#serial(async () => {
       const base = this.state.pending?.crossing ?? this.state.crossing?.spec;
       if (!base || this.state.target?.kind !== "crossing") return this.#set({ message: "Select the two crossing roads first." });
       const next = { ...base, roads: this.state.crossing.roads };
-      for (const k of ["treatment", "crosswalks", "radius", "minor", "over", "diameter"]) if (patch[k] !== undefined) next[k] = patch[k];
+      for (const k of ["treatment", "crosswalks", "radius", "minor", "over", "diameter", "stub"]) if (patch[k] !== undefined) next[k] = patch[k];
       const r = await parseCrossing(JSON.stringify(next));
       this.#set(r.ok ? { pending: { kind: "crossing", crossing: r.crossing, summary: r.summary, source: "edit" }, message: r.crossing.treatment === "cloverleaf" ? NOT_BUILT : null } : { message: r.error });
     });

@@ -298,3 +298,25 @@ test("a rebuild shows hidden and locked road layers for the build, then puts the
   assert.equal(vc.doc.layers.filter((l) => l.name === "road a").length, 1, "the existing road layer is reused, not duplicated");
   done();
 });
+
+test("a short stub can be kept as a dead end or trimmed to a three-way", async () => {
+  const vc = await fakeVectorCraft({ paths: [{ id: 2, name: "road.a" }, { id: 3, name: "road.b" }], selection: [2, 3], spec: roads2 });
+  const { panel, done } = await setup(vc);
+  assert.equal(panel.snapshot().crossing.spec.stub, "keep", "a dead end is the default");
+  await panel.editCrossing({ stub: "3-way" });
+  const p = panel.snapshot().pending;
+  assert.equal(p.crossing.stub, "trim");
+  assert.match(p.summary, /short stub is trimmed \(three-way\)/);
+  await panel.draw();
+  assert.equal(vc.doc.spec.crossings.k1.stub, "trim");
+  assert.equal(panel.snapshot().crossing.spec.stub, "trim", "it is remembered with the intersection");
+  done();
+});
+
+test("an agent can ask for a three-way by trimming the stub", async () => {
+  const vc = await fakeVectorCraft({ paths: [{ id: 2, name: "road.a" }, { id: 3, name: "road.b" }], selection: [2, 3], spec: roads2 });
+  const { panel, done } = await setup(vc, '{"treatment": "signal", "crosswalks": true, "stub": "trim"}');
+  await panel.propose("lighted three-way, trim off the stub", "fake");
+  assert.equal(panel.snapshot().pending.crossing.stub, "trim");
+  done();
+});
