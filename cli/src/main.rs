@@ -1,0 +1,91 @@
+//! `road-builder-cli`: parse, validate and edit road cross-sections from the command line. Always prints one line of JSON.
+//!
+//! ```text
+//! road-builder-cli parse "facing N: bike-lane | lane S x2 | margin 3 | lane N x2 | bike-lane"
+//! road-builder-cli edit  "<text>" delete 0 | move 0 5 | width 2 1.5 | insert 3 "turn-pocket N"
+//! road-builder-cli library
+//! ```
+//! `parse` and `edit` print `{"ok": true, "canonical", "facing", "items": [...], "total_width", "notes"}` or `{"ok": false, "error"}`.
+
+use road_builder_core::crosssection::{Parsed, format, parse};
+use road_builder_core::library::Library;
+use serde_json::{Value, json};
+
+fn describe(p: &Parsed, lib: &Library) -> Value {
+    let mut total = 0.0;
+    let items: Vec<Value> = p
+        .items
+        .iter()
+        .enumerate()
+        .map(|(i, it)| {
+            let def = lib.get(&it.kind);
+            let width = it.width.or(def.map(|d| d.width)).unwrap_or(0.0);
+            total += width;
+            json!({
+                "index": i,
+                "kind": it.kind,
+                "label": def.map_or(it.kind.as_str(), |d| d.label.as_str()),
+                "way": it.way.map(|w| w.letter()),
+                "width": (width * 1000.0).round() / 1000.0,
+                "explicit_width": it.width.is_some(),
+                "directional": def.is_some_and(|d| d.directional),
+                "fill": def.map(|d| d.fill),
+            })
+        })
+        .collect();
+    json!({"ok": true, "canonical": format(p), "facing": p.facing.map(|w| w.letter()), "items": items, "total_width": (total * 1000.0).round() / 1000.0, "notes": p.notes})
+}
+
+fn fail(msg: impl Into<String>) -> Value {
+    json!({"ok": false, "error": msg.into()})
+}
+
+fn index(args: &[String], at: usize, what: &str) -> Result<usize, String> {
+    args.get(at).and_then(|a| a.parse::<usize>().ok()).ok_or_else(|| format!("{what}: give a whole number (items are numbered from 0)"))
+}
+
+fn run(args: &[String], lib: &Library) -> Value {
+    match args.first().map(String::as_str) {
+        Some("parse") => match args.get(1) {
+            Some(text) => parse(text, lib).map_or_else(fail, |p| describe(&p, lib)),
+            None => fail("usage: parse \"<cross-section text>\""),
+        },
+        Some("edit") => {
+            let Some(text) = args.get(1) else { return fail("usage: edit \"<text>\" delete|move|width|insert ...") };
+            let mut p = match parse(text, lib) {
+                Ok(p) => p,
+                Err(e) => return fail(e),
+            };
+            let done = match args.get(2).map(String::as_str) {
+                Some("delete") => index(args, 3, "delete").and_then(|i| p.delete(i)),
+                Some("move") => index(args, 3, "move from").and_then(|a| index(args, 4, "move to").and_then(|b| p.move_item(a, b))),
+                Some("width") => index(args, 3, "width").and_then(|i| match args.get(4).and_then(|w| w.parse::<f64>().ok()) {
+                    Some(w) => p.set_width(i, w),
+                    None => Err("width: give the new width in metres".into()),
+                }),
+                Some("insert") => index(args, 3, "insert at").and_then(|i| match args.get(4) {
+                    Some(t) => p.insert(i, t, lib),
+                    None => Err("insert: give the element text, like \"turn-pocket N\"".into()),
+                }),
+                _ => Err("edit needs one of: delete <i>, move <from> <to>, width <i> <metres>, insert <i> \"<text>\"".into()),
+            };
+            done.map_or_else(fail, |()| describe(&p, lib))
+        }
+        Some("library") => {
+            let els: Vec<Value> = lib
+                .names()
+                .into_iter()
+                .filter_map(|n| lib.get(n))
+                .map(|d| json!({"id": d.id, "label": d.label, "width": d.width, "directional": d.directional, "fill": d.fill, "source": d.source}))
+                .collect();
+            json!({"ok": true, "elements": els})
+        }
+        _ => fail("usage: road-builder-cli parse|edit|library ..."),
+    }
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let out = run(&args, &Library::builtin());
+    println!("{out}");
+}

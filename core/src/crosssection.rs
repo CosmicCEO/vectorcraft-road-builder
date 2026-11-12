@@ -33,7 +33,8 @@ impl Way {
         })
     }
 
-    fn letter(self) -> &'static str {
+    /// The short written form: N, S, E, W, fwd, back.
+    pub fn letter(self) -> &'static str {
         match self {
             Way::North => "N",
             Way::South => "S",
@@ -69,6 +70,53 @@ pub struct Parsed {
     pub items: Vec<Item>,
     /// Things the parser had to guess, for the user to see.
     pub notes: Vec<String>,
+}
+
+impl Parsed {
+    fn check(&self, i: usize) -> Result<(), String> {
+        if i < self.items.len() { Ok(()) } else { Err(format!("there is no item {} (the cross-section has {} items, numbered from 0)", i, self.items.len())) }
+    }
+
+    /// Removes item `i`. A cross-section must keep at least one element.
+    pub fn delete(&mut self, i: usize) -> Result<(), String> {
+        self.check(i)?;
+        if self.items.len() == 1 {
+            return Err("cannot delete the only element".into());
+        }
+        self.items.remove(i);
+        Ok(())
+    }
+
+    /// Moves item `from` so that it ends up at position `to`.
+    pub fn move_item(&mut self, from: usize, to: usize) -> Result<(), String> {
+        self.check(from)?;
+        self.check(to)?;
+        let it = self.items.remove(from);
+        self.items.insert(to, it);
+        Ok(())
+    }
+
+    pub fn set_width(&mut self, i: usize, width: f64) -> Result<(), String> {
+        self.check(i)?;
+        if !(width > 0.0 && width < 100.0) {
+            return Err("a width must be between 0 and 100 metres".into());
+        }
+        self.items[i].width = Some(width);
+        Ok(())
+    }
+
+    /// Inserts the element(s) written in `text` (same shorthand, one item or several) before position `at` (`items.len()` appends).
+    pub fn insert(&mut self, at: usize, text: &str, lib: &Library) -> Result<(), String> {
+        if at > self.items.len() {
+            return Err(format!("cannot insert at {at}: the cross-section has {} items", self.items.len()));
+        }
+        let more = parse(text, lib)?;
+        self.notes.extend(more.notes);
+        for (k, it) in more.items.into_iter().enumerate() {
+            self.items.insert(at + k, it);
+        }
+        Ok(())
+    }
 }
 
 /// Which way along the path a travel element runs, once the compass words are resolved.

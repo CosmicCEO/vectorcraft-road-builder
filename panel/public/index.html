@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Road Builder</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>Road Builder</h1>
+  <span id="dot" class="dot" title="Connection to VectorCraft"></span>
+  <label class="agent">Agent <select id="agent"></select></label>
+</header>
+
+<main>
+  <p id="problem" class="problem" hidden></p>
+
+  <section id="context" class="card"></section>
+
+  <section id="road" class="card" hidden>
+    <div id="bar" class="bar" aria-label="Cross-section to scale"></div>
+    <ol id="items" class="items"></ol>
+    <p id="total" class="muted"></p>
+  </section>
+
+  <section id="proposal" class="card proposal" hidden>
+    <h2>Proposed change</h2>
+    <div id="pbar" class="bar"></div>
+    <ol id="pitems" class="items"></ol>
+    <p id="ptotal" class="muted"></p>
+    <div class="row">
+      <button id="cancel" class="plain">Cancel</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <label for="words">Describe the road, or the change you want</label>
+    <textarea id="words" rows="3" placeholder="e.g. a bike lane, an apron, two south lanes, a 3 m grassy curbed margin, two north lanes, apron, bike lane"></textarea>
+    <div class="row">
+      <button id="propose">Propose</button>
+      <span id="thinking" class="muted" hidden>Thinking…</span>
+    </div>
+    <details>
+      <summary>Type the shorthand yourself</summary>
+      <input id="shorthand" type="text" spellcheck="false" placeholder="facing N: bike-lane | lane S x2 | margin 3 | lane N x2 | bike-lane">
+      <button id="use" class="plain">Use this</button>
+      <p class="muted">Elements: lane, turn-pocket, bike-lane, apron, shoulder, margin, median, sidewalk, parking-lane … Direction N S E W, width 3 or 10ft, repeat x2.</p>
+    </details>
+  </section>
+
+  <section class="card draw">
+    <fieldset id="scope" hidden>
+      <label><input type="radio" name="scope" value="segment" checked> <span id="scope-all">All pieces of this road</span></label>
+      <label><input type="radio" name="scope" value="selected"> Only the selected piece</label>
+    </fieldset>
+    <button id="draw" class="primary">Draw</button>
+    <p id="message" class="message" role="status"></p>
+  </section>
+</main>
+<script src="/app.js" type="module"></script>
+</body>
+</html>

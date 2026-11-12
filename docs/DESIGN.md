@@ -93,6 +93,19 @@ Still to do in phase 1: migrate Ross Bridge onto cross-sections, pmap v2 export 
 so the `.vectorcraft` file stays the master and pmap v2 is the hand-off to the simulation), connecting segments end to end, and removing
 the last Ross-Bridge-specific names from the core. Junction templates, part-way turn pockets and arrows are phase 3.
 
+## Phase 2 status (companion panel and agent loop: done for roads; junction connections wait for phase 3)
+- `road-builder-cli` (native): parse, canonical text, validate and edit (delete, move, width, insert) cross-sections.
+- `panel/lib/providers.mjs`: agents are text in, shorthand out, then validated and, if invalid, sent back once with the exact error.
+  Kinds: `claude` (headless, text only, no tools, no hooks), `cli` (any command, JSON on stdin), `http` (OpenAI-compatible).
+  Tested with a real Claude on the story sentence, the "delete the bike lane going south" edit, a rural-road description and a turn pocket.
+- `panel/server.mjs` + `panel/lib/panel.mjs`: follows the selection through the control port (about 17 ms a poll), reads the stored
+  description from a saved copy, shows a proposal before anything changes, applies Describe Road then Build Road, restores the
+  user's selection. Loopback only; Host and Origin checked.
+- `panel/public/`: the page (to-scale bar, element list with remove/move/width, describe box, scope choice, Draw).
+- Verified live: the first story, end to end, through the panel in the real app with a real agent (`panel/live-check.mjs`).
+- Real-world snag found: macOS asks permission before one app may script another, so the panel never uses AppleScript.
+- Apple Intelligence and other agents (phase 3): the provider interface is in place; `apple-fm` needs the small Swift helper.
+
 ## Verification at each phase
 Native unit tests for the core; the real VectorCraft engine via `scripts/roundtrip.sh` and the MCP loop (`scripts/mcp-smoke.mjs`);
 a visual check by screenshot against the story, step by step.

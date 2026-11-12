@@ -89,3 +89,18 @@ fn the_library_can_be_extended_and_overridden() {
     assert!(lib.merge(&serde_json::json!({"elements": {"bad": {"role": "wibble", "width": 1.0}}})).is_err());
     assert!(lib.merge(&serde_json::json!({"elements": {"bad": {"role": "travel", "width": -1.0}}})).is_err());
 }
+
+#[test]
+fn items_can_be_deleted_moved_resized_and_inserted() {
+    let lib = Library::builtin();
+    let mut p = parse(STORY, &lib).unwrap();
+    p.delete(0).unwrap(); // the west bike lane
+    assert_eq!(format(&p), "facing N: apron | lane S x2 | margin 3 | lane N x2 | apron | bike-lane");
+    p.set_width(0, 1.0).unwrap();
+    p.move_item(0, 5).unwrap();
+    p.insert(0, "bike-lane", &lib).unwrap();
+    assert_eq!(format(&p), "facing N: bike-lane | lane S x2 | margin 3 | lane N x2 | apron 1 | apron | bike-lane");
+    assert!(p.delete(99).is_err() && p.set_width(0, -1.0).is_err() && p.insert(99, "lane", &lib).is_err());
+    let mut one = parse("lane", &lib).unwrap();
+    assert!(one.delete(0).unwrap_err().contains("only element"));
+}

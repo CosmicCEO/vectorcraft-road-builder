@@ -33,6 +33,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "road-builder-cli"
+version = "0.1.0"
+dependencies = [
+ "road-builder-core",
+ "serde_json",
+]
+
+[[package]]
 name = "road-builder-core"
 version = "0.1.0"
 dependencies = [

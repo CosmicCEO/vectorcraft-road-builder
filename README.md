@@ -46,6 +46,29 @@ inside trimmed).
 - Not built yet: junctions between described roads, turn pockets that start and end part-way along a road, lane arrows, and the
   companion panel. See `docs/DESIGN.md`.
 
+## The companion panel (new in 0.3)
+
+A small page beside VectorCraft where you describe roads in words and click them to see and change their elements:
+
+```
+sh scripts/start-panel.sh          # starts VectorCraft with its control port, the panel, and opens your browser
+```
+
+1. **Draw a line** in VectorCraft and select it. The panel says "a plain line is selected".
+2. **Describe it** in the box ("one bike lane, an apron, two south lanes, a 3 m grassy curbed margin, two north lanes, apron, bike lane")
+   and press **Propose**. An agent turns the words into the shorthand; you see the proposed elements to scale before anything changes.
+3. **Draw**. The road is built. Click a road later and its elements are listed: remove one (✕), move it (◀ ▶), change a width, or
+   describe a change in words ("delete the bike lane going south"). If you broke the line into pieces, choose *all pieces* or *only the
+   selected piece*.
+
+The agent is a plug-in point (`panel/providers.json`): Claude (default, uses your Claude login, no key), any command that reads a JSON
+request on stdin, or any OpenAI-compatible endpoint (local or hosted). Whatever the agent answers is checked by a native helper
+(`road-builder-cli`) before the panel will show or apply it, so no agent can change your drawing directly. The panel listens on
+127.0.0.1 only and ignores requests that did not come from its own page.
+
+Tests: `node --test panel/test/` (24, against a fake VectorCraft) and, with VectorCraft and the panel running,
+`node panel/live-check.mjs` replays the first story through the real app and a real agent.
+
 ## What you edit with the older centerline model (naming contract)
 
 | Path name | Meaning |
