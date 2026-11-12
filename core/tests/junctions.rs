@@ -181,3 +181,14 @@ fn stop_bars_and_signs_are_on_the_side_traffic_enters() {
     let (lo, hi) = bbox(&pts(&out, "gen.junction.x.signal.leg.1"));
     assert!((lo[1] + hi[1]) / 2.0 < 356.4, "east leg signal on the north side");
 }
+
+#[test]
+fn the_main_road_median_ends_short_of_the_crosswalk() {
+    let (out, _) = run(&spec_with(json!({"legs": [{"side": "west", "cross_section": "lane back | lane fwd"}, {"side": "east", "cross_section": "lane back | lane fwd"}], "control": "signal", "crosswalks": true})));
+    // Junction centre is at document y 360 and the legs are 7.2 m wide: box edge 3.6 m out, crosswalk 1 m beyond and 3 m deep, cap 0.3 m past it.
+    let n = names(&out);
+    assert!(n.iter().any(|x| x == "gen.junction.x.cap.before.1") && n.iter().any(|x| x == "gen.junction.x.cap.after.1"), "{n:?}");
+    let (lo, hi) = bbox(&pts(&out, "gen.junction.x.cap.before.1").into_iter().chain(pts(&out, "gen.junction.x.cap.after.1")).collect::<Vec<_>>());
+    assert!((lo[0] - 198.3).abs() < 1e-3 && (hi[0] - 201.7).abs() < 1e-3, "{lo:?} {hi:?}");
+    assert!((lo[1] - (360.0 - 7.9)).abs() < 1e-3 && (hi[1] - (360.0 + 7.9)).abs() < 1e-3, "{lo:?} {hi:?}");
+}

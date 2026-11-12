@@ -12,13 +12,14 @@
 use crate::crosssection::{Dir, Placed, layout};
 use crate::geom::{P, Poly, add, dot, scale, sub};
 use crate::junction::{polygon, travel};
+use crate::library::Role;
 use crate::offset::{MITRE_LIMIT, offset_polyline};
 use crate::output::Out;
 use crate::roads::{CURB, Spec, WHITE, emit as emit_road, flip, heading, segment_id};
 use crate::vcdoc::Item;
 use serde_json::{Value, json};
 
-const PAVEMENT: [f64; 3] = [0.86, 0.86, 0.86];
+pub(crate) const PAVEMENT: [f64; 3] = [0.86, 0.86, 0.86];
 const GRASS: [f64; 3] = [0.72, 0.85, 0.62];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -255,6 +256,19 @@ fn emit(items: &[Item], spec: &Spec, id: &str, cs: &CrossingSpec, out: &mut Out)
     Ok(())
 }
 
+/// Where a median, margin or verge in the middle of a road ends before an intersection: it is capped just short of the crosswalk (or a metre
+/// from the paved box when there is none), so the crosswalk and the box lie on plain pavement. `from` and `to` are distances from the
+/// centre of the intersection along the approach (start at 0: on an oblique crossing the box edge is nearer than its far corner); `at(along, across)` turns a distance along and a sideways offset into a point.
+/// Pavement is laid over the median between them, with a kerb across the end (the nose).
+pub(crate) fn cap_medians(out: &mut Out, name: &str, placed: &[Placed], from: f64, to: f64, at: &dyn Fn(f64, f64) -> P) {
+    const OVER: f64 = 0.2; // laid a little past the median's own kerbs so they are covered
+    for (k, e) in placed.iter().enumerate().filter(|(i, e)| *i > 0 && *i + 1 < placed.len() && e.role == Role::Curbed).map(|(_, e)| e).enumerate() {
+        let ring = [at(from, e.left - OVER), at(to, e.left - OVER), at(to, e.right + OVER), at(from, e.right + OVER)];
+        out.polygon(&format!("{name}.{}", k + 1), &ring, flip, PAVEMENT);
+        out.path(&format!("{name}.{}.nose", k + 1), &[vec![at(to, e.left), at(to, e.right)]], flip, CURB, 0.3, false);
+    }
+}
+
 /// Where the two roads' bands overlap, at offsets `ua` along road a's normal and `ub` along road b's.
 fn corner_at(x: &Crossing, arms: &[Arm], ua: f64, ub: f64) -> P {
     let (a, b) = (&arms[0], &arms[1]);
@@ -296,6 +310,7 @@ fn at_grade(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: &[
             let ext = reach(&corners, x.p, dir);
             let tag = format!("{}.{}", arm.id, if sign < 0.0 { "before" } else { "after" });
             let at = |along: f64, across: f64| add(add(x.p, scale(dir, along)), scale(arm.n, across));
+            cap_medians(out, &format!("{base}.cap.{tag}"), &arm.placed, 0.0, ext + gap + if cs.crosswalks { cw + 0.3 } else { 0.0 }, &at);
             if cs.crosswalks {
                 let centre = ext + gap + cw / 2.0;
                 let stripes: Vec<Vec<P>> = (0..((arm.hi - arm.lo) / 1.2).floor() as usize)

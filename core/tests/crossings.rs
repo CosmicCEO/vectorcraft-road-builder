@@ -262,3 +262,25 @@ fn a_cloverleaf_says_it_is_not_built_yet() {
     let (_, notes) = run(&across(), &spec(json!({"roads": ["a", "b"], "treatment": "cloverleaf"})));
     assert!(notes.iter().any(|n| n.contains("cloverleaf") && n.contains("not built yet")), "{notes:?}");
 }
+
+#[test]
+fn the_median_ends_short_of_the_crosswalk_with_a_nose() {
+    let (out, _) = run(&across(), &spec(signals()));
+    // Road a has a 3 m margin in the middle (x 198.5..201.5). South arm: box edge 3.6 m from the crossing, crosswalk 1 m beyond, 3 m deep,
+    // so the median is capped 0.3 m past the crosswalk: 3.6 + 1 + 3 + 0.3 = 7.9 m south of the crossing (document y 407.9). The cap starts at the
+    // crossing itself, so no median is left between the box edge and the cap on an oblique crossing.
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.cap.a.before.1"));
+    assert!((lo[0] - 198.3).abs() < 1e-3 && (hi[0] - 201.7).abs() < 1e-3 && (lo[1] - 400.0).abs() < 1e-3 && (hi[1] - 407.9).abs() < 1e-3, "{lo:?} {hi:?}");
+    let nose = pts(&out, "gen.crossing.k1.cap.a.before.1.nose");
+    assert!(nose.iter().all(|p| (p[1] - 407.9).abs() < 1e-3), "{nose:?}");
+    let (lo, hi) = bbox(&nose);
+    assert!((lo[0] - 198.5).abs() < 1e-3 && (hi[0] - 201.5).abs() < 1e-3);
+    assert!(names(&out).iter().any(|n| n == "gen.crossing.k1.cap.a.after.1"), "both arms are capped");
+    assert!(!names(&out).iter().any(|n| n.contains(".cap.b.")), "a two-lane road has no median to cap");
+    // Without crosswalks the median stops a metre from the box.
+    let mut c = signals();
+    c["crosswalks"] = json!(false);
+    let (out, _) = run(&across(), &spec(c));
+    let (_, hi) = bbox(&pts(&out, "gen.crossing.k1.cap.a.before.1"));
+    assert!((hi[1] - 404.6).abs() < 1e-3, "{hi:?}");
+}

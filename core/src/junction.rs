@@ -286,6 +286,11 @@ pub fn build(items: &[Item], spec: &Spec, out: &mut Out) -> Vec<String> {
 
         // Crosswalks: across the road on both sides of the junction, and across each leg.
         let (gap, cw) = (1.0, 3.0);
+        // The median ends short of the crosswalk (or a metre from the box when there is none).
+        for sv in [-1.0, 1.0] {
+            let at = |along: f64, across: f64| fr.at(across, sv * along);
+            crate::crossing::cap_medians(out, &format!("{base}.cap.{}", if sv > 0.0 { "after" } else { "before" }), &main, hw - 0.3, hw + gap + if jspec.crosswalks { cw + 0.3 } else { 0.0 }, &at);
+        }
         if jspec.crosswalks {
             let mut stripes_main: Vec<Vec<P>> = Vec::new();
             let width = main_right - main_left;
