@@ -2,12 +2,21 @@
 //! Everything it creates is named `gen.*`, so a rebuild replaces the previous result and never touches the paths the owner edits.
 
 use crate::geom::{P, Poly, add, scale};
-use crate::scene::Scene;
-use crate::vcdoc::items_from_filter_input;
-use serde_json::Value;
-use std::fmt::Write;
+use crate::output::Out;
+use crate::crossing::{self, CrossingSpec};
+use crate::hub::{self, HubSpec};
+use crate::transition;
+use crate::junction::{self, JunctionSpec, junction_id};
+use crate::roads::{self, Spec, anchor_from, segment_id};
+use crate::scene::{Scene, is_junction_name};
+use crate::vcdoc::{Item, items_from_filter_input};
+use serde_json::{Value, json};
 
 pub const GEN_PREFIX: &str = "gen.";
+/// The drawn line of a road or junction: bright and bold (metres of stroke), so it can be seen and clicked among the generated shapes.
+const SPINE_ROAD: [f64; 3] = [0.85, 0.1, 0.1];
+const SPINE_JUNCTION: [f64; 3] = [0.1, 0.35, 0.9];
+const SPINE_WIDTH: f64 = 1.0;
 
 /// (profile key, colour, stroke width, dash on/off in metres or None for solid)
 const STYLE: [(&str, [f64; 3], f64, Option<(f64, f64)>); 12] = [
@@ -35,7 +44,7 @@ fn painted(sc: &Scene, key: &str, s: f64) -> bool {
 }
 
 /// Drops points that lie within `tol` metres of the straight line between their kept neighbours (iterative Douglas-Peucker).
-fn simplify(pts: &[P], tol: f64) -> Vec<P> {
+pub(crate) fn simplify(pts: &[P], tol: f64) -> Vec<P> {
     if pts.len() < 3 {
         return pts.to_vec();
     }
@@ -116,100 +125,52 @@ fn side_edge(sc: &Scene, side: f64, s: f64) -> f64 {
     keys.iter().find_map(|k| sc.curves.get(*k).and_then(|c| c.at(s))).unwrap_or(if side > 0.0 { 3.6 } else { -17.2 })
 }
 
-/// Output text under construction: written directly (not as a JSON tree) because plug-ins run in an interpreter under an instruction budget.
-struct Out {
-    text: String,
-    first: bool,
-}
-
-impl Out {
-    fn new() -> Out {
-        Out { text: String::from("{\"objects\":["), first: true }
-    }
-
-    fn sep(&mut self) {
-        if !self.first {
-            self.text.push(',');
-        }
-        self.first = false;
-    }
-
-    fn keep(&mut self, id: i64) {
-        self.sep();
-        let _ = write!(self.text, "{{\"id\":{id}}}");
-    }
-
-    /// A new stroked path object; `map` converts each world point to a document point.
-    fn path(&mut self, name: &str, subs: &[Vec<P>], map: impl Fn(P) -> P, rgb: [f64; 3], width: f64, closed: bool) {
-        self.sep();
-        self.text.push_str("{\"name\":");
-        self.text.push_str(&serde_json::to_string(name).unwrap_or_default());
-        self.text.push_str(",\"path\":{\"subpaths\":[");
-        for (i, sub) in subs.iter().enumerate() {
-            if i > 0 {
-                self.text.push(',');
-            }
-            self.text.push_str("{\"anchors\":[");
-            for (k, &w) in sub.iter().enumerate() {
-                let p = map(w);
-                if k > 0 {
-                    self.text.push(',');
-                }
-                self.text.push_str("{\"p\":[");
-                num(&mut self.text, p[0]);
-                self.text.push(',');
-                num(&mut self.text, p[1]);
-                self.text.push_str("]}");
-            }
-            self.text.push_str(if closed { "],\"closed\":true}" } else { "],\"closed\":false}" });
-        }
-        self.text.push_str("]},\"strokes\":[{\"paint\":{\"type\":\"solid\",\"color\":{\"model\":\"rgb\",\"r\":");
-        num(&mut self.text, rgb[0]);
-        self.text.push_str(",\"g\":");
-        num(&mut self.text, rgb[1]);
-        self.text.push_str(",\"b\":");
-        num(&mut self.text, rgb[2]);
-        self.text.push_str("}},\"width\":");
-        num(&mut self.text, width);
-        self.text.push_str(",\"cap\":\"butt\",\"join\":\"miter\",\"miterLimit\":4}]}");
-    }
-
-    fn finish(mut self) -> String {
-        self.text.push_str("]}");
-        self.text
-    }
-}
-
-/// A number to the nearest millimetre, without float-formatting machinery.
-fn num(out: &mut String, x: f64) {
-    let v = (x * 1000.0).round() as i64;
-    if v < 0 {
-        out.push('-');
-    }
-    let v = v.unsigned_abs();
-    let _ = write!(out, "{}", v / 1000);
-    let frac = v % 1000;
-    if frac != 0 {
-        let digits = format!("{frac:03}");
-        out.push('.');
-        out.push_str(digits.trim_end_matches('0'));
-    }
-}
-
 /// Filter output text: every source object kept by id, the old `gen.*` paths dropped, fresh `gen.*` paths added.
 pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
     let items = items_from_filter_input(input);
-    let sc = Scene::from_items(&items)?;
-    let stub_len = params["stubLength"].as_f64().unwrap_or(28.0);
-    let stub_w = params["stubWidth"].as_f64().unwrap_or(8.0);
-    let to_doc = |p: P| sc.to_doc(p);
+    let spec = Spec::from_document_data(&params["_context"]["documentData"]);
+    let has_road = items.iter().any(|i| segment_id(&i.name).is_some() || junction_id(&i.name).is_some());
+    let has_legacy = items.iter().any(|i| i.name == "centerline");
+    if !has_road && !has_legacy {
+        return Err("Nothing to build. Draw a line and name it road.<id> (or open a pmap that has a centerline), then Select All so the road is included.".into());
+    }
 
     let mut out = Out::new();
+    let mut notes: Vec<String> = Vec::new();
     for it in items.iter().filter(|i| !i.name.starts_with(GEN_PREFIX)) {
-        if let Some(id) = it.id {
+        let Some(id) = it.id else { continue };
+        // The line you drew stays on top of what is built from it, and is drawn bold so it is easy to find and click.
+        if segment_id(&it.name).is_some() {
+            out.keep_styled(id, SPINE_ROAD, SPINE_WIDTH);
+        } else if junction_id(&it.name).is_some() {
+            out.keep_styled(id, SPINE_JUNCTION, SPINE_WIDTH);
+        } else {
             out.keep(id);
         }
     }
+    if has_road {
+        let mut trims = crossing::trims(&items, &spec);
+        trims.extend(hub::trims(&items, &spec));
+        notes.extend(roads::build_clipped(&items, &spec, &trims, &mut out));
+        notes.extend(junction::build(&items, &spec, &mut out)); // junctions are drawn over the roads they join
+        notes.extend(crossing::build(&items, &spec, &mut out)); // and so are intersections where two roads cross
+        notes.extend(hub::build(&items, &spec, &mut out)); // and where three or more meet
+    }
+    if has_legacy {
+        build_legacy(&mut out, &items, params)?;
+    }
+    // What the build had to say is kept with the document so the panel can show it; the rest of the stored data is carried over unchanged.
+    let mut spec = spec;
+    spec.set_notes(&notes);
+    Ok(out.finish_with(Some(&spec.to_value())))
+}
+
+/// The original model: one `centerline` plus profile curves, flags and junction markers (see `scene`).
+fn build_legacy(out: &mut Out, items: &[Item], params: &Value) -> Result<(), String> {
+    let sc = Scene::from_items(items)?;
+    let stub_len = params["stubLength"].as_f64().unwrap_or(28.0);
+    let stub_w = params["stubWidth"].as_f64().unwrap_or(8.0);
+    let to_doc = |p: P| sc.to_doc(p);
 
     for (key, rgb, width, dash) in STYLE {
         let r = runs(&sc, key, dash);
@@ -239,7 +200,7 @@ pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
             out.path(&format!("{GEN_PREFIX}stop.{tag}"), &[vec![along(7.0, -hw), along(7.0, hw)]], to_doc, [0.95, 0.95, 0.95], 0.6, false);
         }
     }
-    Ok(out.finish())
+    Ok(())
 }
 
 /// The same as a JSON value (for tests and callers that want one).
@@ -281,4 +242,211 @@ pub fn add_junction_text(input: &Value, params: &Value) -> Result<String, String
     }
     out.path(&name, &[square], |p| sc.to_doc(p), [0.0, 0.4, 0.8], 0.5, true);
     Ok(out.finish())
+}
+
+/// Names that already mean something else, so a plain line must not be mistaken for them.
+fn is_reserved_name(name: &str) -> bool {
+    name == "centerline" || ["gen.", "profile.", "flag.", "arrow."].iter().any(|p| name.starts_with(p)) || is_junction_name(name) || junction_id(name).is_some()
+}
+
+/// Command "Set Cross-section": stores the road's cross-section (see `crosssection`) in the document's plug-in data. Applies to the
+/// selected `road.*` lines, or to the segment named in `segment`; a single plain line is turned into a road with a fresh id.
+pub fn set_cross_section_text(input: &Value, params: &Value) -> Result<String, String> {
+    let items = items_from_filter_input(input);
+    let mut spec = Spec::from_document_data(&params["_context"]["documentData"]);
+    let text = params["cross_section"].as_str().map(str::trim).filter(|t| !t.is_empty()).ok_or("Write the cross-section, for example: bike-lane | lane back x2 | margin 3 | lane fwd x2 | bike-lane")?;
+    let anchor = params["anchor"].as_str().and_then(anchor_from);
+    let clean = |t: &str| t.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(16).collect::<String>();
+
+    let mut targets: Vec<String> = Vec::new();
+    let mut renames: Vec<(i64, String)> = Vec::new();
+    if let Some(seg) = params["segment"].as_str().map(clean).filter(|s| !s.is_empty()) {
+        targets.push(seg);
+    } else {
+        for it in &items {
+            if let Some(id) = segment_id(&it.name).filter(|id| !targets.contains(id)) {
+                targets.push(id);
+            }
+        }
+        // "Selected pieces only": give them an id of their own, starting from a copy of the old description, so the other pieces keep theirs.
+        if params["scope"].as_str() == Some("selected") && !targets.is_empty() {
+            let mut fresh: Vec<String> = Vec::new();
+            for old in &targets {
+                let new = (1..).map(|n| format!("r{n}")).find(|id| !spec.segments.contains_key(id) && !fresh.contains(id) && !targets.contains(id)).unwrap_or_default();
+                for it in items.iter().filter(|i| segment_id(&i.name).as_deref() == Some(old.as_str())) {
+                    if let Some(iid) = it.id {
+                        renames.push((iid, format!("road.{new}")));
+                    }
+                }
+                if let Some(prev) = spec.segments.get(old).cloned() {
+                    spec.segments.insert(new.clone(), prev);
+                }
+                fresh.push(new);
+            }
+            targets = fresh;
+        }
+        if targets.is_empty() {
+            let plain: Vec<&Item> = items.iter().filter(|i| i.id.is_some() && !i.subs.is_empty() && !is_reserved_name(&i.name)).collect();
+            match plain.as_slice() {
+                [] => return Err("Select the line to describe (or give its segment id).".into()),
+                [one] => {
+                    let taken = |id: &str| spec.segments.contains_key(id);
+                    let id = (1..).map(|n| format!("r{n}")).find(|id| !taken(id)).unwrap_or_default();
+                    renames.push((one.id.unwrap_or_default(), format!("road.{id}")));
+                    targets.push(id);
+                }
+                _ => return Err("More than one line is selected: select the one line to describe.".into()),
+            }
+        }
+    }
+    for id in &targets {
+        spec.set_cross_section(id, text, anchor.clone())?;
+    }
+    let mut out = Out::new();
+    for it in &items {
+        if let Some(id) = it.id {
+            match renames.iter().find(|r| r.0 == id) {
+                Some((_, name)) => out.rename(id, name),
+                None => out.keep(id),
+            }
+        }
+    }
+    Ok(out.finish_with(Some(&spec.to_value())))
+}
+
+/// Command "Set Junction": stores a junction description (see `junction`) in the document's plug-in data. Applies to the selected
+/// `junction.*` line, or to the one selected plain line, which is renamed `junction.<id>`; `junction` names the id explicitly.
+pub fn set_junction_text(input: &Value, params: &Value) -> Result<String, String> {
+    let items = items_from_filter_input(input);
+    let mut spec = Spec::from_document_data(&params["_context"]["documentData"]);
+    let raw = params["description"].as_str().map(str::trim).filter(|t| !t.is_empty()).ok_or("Give the junction description (JSON), for example {\"legs\": [{\"side\": \"left\", \"cross_section\": \"lane back | lane fwd\"}], \"control\": \"signal\", \"crosswalks\": true}")?;
+    let value: Value = serde_json::from_str(raw).map_err(|e| format!("the junction description is not valid JSON: {e}"))?;
+    let js = JunctionSpec::from_json(&value, &spec.library)?;
+    let clean = |t: &str| t.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(16).collect::<String>();
+
+    let mut renames: Vec<(i64, String)> = Vec::new();
+    let id = if let Some(id) = params["junction"].as_str().map(clean).filter(|s| !s.is_empty()) {
+        id
+    } else if let Some(id) = items.iter().find_map(|i| junction_id(&i.name)) {
+        id
+    } else {
+        let plain: Vec<&Item> = items.iter().filter(|i| i.id.is_some() && !i.subs.is_empty() && !is_reserved_name(&i.name) && segment_id(&i.name).is_none()).collect();
+        match plain.as_slice() {
+            [] => return Err("Select the connecting line to describe (or give its junction id).".into()),
+            [one] => {
+                let id = (1..).map(|n| format!("j{n}")).find(|id| spec.junction_value(id).is_none()).unwrap_or_default();
+                renames.push((one.id.unwrap_or_default(), format!("junction.{id}")));
+                id
+            }
+            _ => return Err("More than one line is selected: select the one connecting line to describe.".into()),
+        }
+    };
+    spec.set_junction(&id, &js);
+    let mut out = Out::new();
+    for it in &items {
+        if let Some(iid) = it.id {
+            match renames.iter().find(|r| r.0 == iid) {
+                Some((_, name)) => out.rename(iid, name),
+                None => out.keep(iid),
+            }
+        }
+    }
+    Ok(out.finish_with(Some(&spec.to_value())))
+}
+
+/// Command "Set Crossing": the two selected roads (one line of each) cross; stores the intersection's description (see `crossing`) in the
+/// document's plug-in data. `description` is JSON (control, crosswalks, radius, minor); the two road ids come from the selection.
+pub fn set_crossing_text(input: &Value, params: &Value) -> Result<String, String> {
+    let items = items_from_filter_input(input);
+    let mut spec = Spec::from_document_data(&params["_context"]["documentData"]);
+    let mut roads: Vec<String> = Vec::new();
+    for it in &items {
+        if let Some(id) = segment_id(&it.name).filter(|id| !roads.contains(id)) {
+            roads.push(id);
+        }
+    }
+    let [a, b] = <[String; 2]>::try_from(roads).map_err(|r: Vec<String>| format!("Select exactly two roads (one line of each) that cross; {} road{} selected.", r.len(), if r.len() == 1 { " is" } else { "s are" }))?;
+    let mut value: Value = match params["description"].as_str().map(str::trim).filter(|t| !t.is_empty()) {
+        Some(raw) => serde_json::from_str(raw).map_err(|e| format!("the intersection description is not valid JSON: {e}"))?,
+        None => json!({}),
+    };
+    value["roads"] = json!([a, b]);
+    let cs = CrossingSpec::from_json(&value)?;
+    if crossing::find(&items, &a, &b).is_none() {
+        return Err(format!("Roads {a} and {b} do not cross within the selected lines. Draw one across the other, then select both."));
+    }
+    let id = spec.crossing_between(&a, &b).unwrap_or_else(|| (1..).map(|n| format!("k{n}")).find(|id| !spec.crossings().iter().any(|(k, _)| k == id)).unwrap_or_default());
+    spec.set_crossing(&id, &cs);
+    let mut out = Out::new();
+    for it in &items {
+        if let Some(iid) = it.id {
+            out.keep(iid);
+        }
+    }
+    Ok(out.finish_with(Some(&spec.to_value())))
+}
+
+/// Command "Set Hub": three or more selected roads that meet at one point; stores the hub's description (see `hub`). `description` is JSON
+/// (treatment, crosswalks, radius, minor, stub); the road ids come from the selection.
+pub fn set_hub_text(input: &Value, params: &Value) -> Result<String, String> {
+    let items = items_from_filter_input(input);
+    let mut spec = Spec::from_document_data(&params["_context"]["documentData"]);
+    let mut roads: Vec<String> = Vec::new();
+    for it in &items {
+        if let Some(id) = segment_id(&it.name).filter(|id| !roads.contains(id)) {
+            roads.push(id);
+        }
+    }
+    if roads.len() < 3 {
+        return Err(format!("Select one line of each of three or more roads that meet at a point; {} road{} selected.", roads.len(), if roads.len() == 1 { " is" } else { "s are" }));
+    }
+    let mut value: Value = match params["description"].as_str().map(str::trim).filter(|t| !t.is_empty()) {
+        Some(raw) => serde_json::from_str(raw).map_err(|e| format!("the hub description is not valid JSON: {e}"))?,
+        None => json!({}),
+    };
+    value["roads"] = json!(roads);
+    let hs = HubSpec::from_json(&value)?;
+    let id = spec.hub_with(&roads).unwrap_or_else(|| (1..).map(|n| format!("h{n}")).find(|id| !spec.hubs().iter().any(|(k, _)| k == id)).unwrap_or_default());
+    spec.set_hub(&id, &hs);
+    let mut out = Out::new();
+    for it in &items {
+        if let Some(iid) = it.id {
+            out.keep(iid);
+        }
+    }
+    Ok(out.finish_with(Some(&spec.to_value())))
+}
+
+/// Command "Set Transition": the selected line of a road gains or loses lanes; stores the transition (see `transition`) in the document's plug-in
+/// data. `description` is JSON (change, side, direction, count, at, length, speed, to, piece, remove).
+pub fn set_transition_text(input: &Value, params: &Value) -> Result<String, String> {
+    let items = items_from_filter_input(input);
+    let mut spec = Spec::from_document_data(&params["_context"]["documentData"]);
+    let mut roads: Vec<String> = Vec::new();
+    for it in &items {
+        if let Some(id) = segment_id(&it.name).filter(|id| !roads.contains(id)) {
+            roads.push(id);
+        }
+    }
+    let [road] = <[String; 1]>::try_from(roads).map_err(|r: Vec<String>| format!("Select one line of one road; {} road{} selected.", r.len(), if r.len() == 1 { " is" } else { "s are" }))?;
+    let value: Value = match params["description"].as_str().map(str::trim).filter(|t| !t.is_empty()) {
+        Some(raw) => serde_json::from_str(raw).map_err(|e| format!("the transition description is not valid JSON: {e}"))?,
+        None => return Err("Describe the transition: change (add or drop), side (left or right) and optionally count, at, length.".into()),
+    };
+    let t = transition::TransitionSpec::from_json(&value)?;
+    // Check it can be worked out before storing it.
+    let (parsed, _, _) = spec.for_segment(&road);
+    if value["remove"].as_bool() != Some(true) {
+        let head = items.iter().find_map(|i| i.subs.first()).map_or([0.0, 1.0], |s| roads::heading(&s.iter().map(|&p| roads::flip(p)).collect::<Vec<_>>()));
+        let here = transition::cross_section_at(&parsed, &spec.library, head, &spec.transitions_for(&road), t.piece, t.at.unwrap_or(f64::MAX));
+        transition::derive_to(&here, &spec.library, head, &t)?;
+    }
+    spec.set_transition(&road, &t, value["remove"].as_bool() == Some(true));
+    let mut out = Out::new();
+    for it in &items {
+        if let Some(iid) = it.id {
+            out.keep(iid);
+        }
+    }
+    Ok(out.finish_with(Some(&spec.to_value())))
 }

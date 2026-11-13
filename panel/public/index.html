@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Road Builder</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>Road Builder</h1>
+  <span id="dot" class="dot" title="Connection to VectorCraft"></span>
+  <label class="agent">Agent <select id="agent"></select></label>
+</header>
+
+<main>
+  <p id="problem" class="problem" hidden></p>
+
+  <section id="context" class="card"></section>
+
+  <section id="notesCard" class="card notes" hidden>
+    <h2>Notes from the last build</h2>
+    <ul id="notes" class="changes"></ul>
+  </section>
+
+  <section id="modeCard" class="card" hidden>
+    <fieldset class="mode">
+      <label><input type="radio" name="mode" value="road" checked> A road</label>
+      <label><input type="radio" name="mode" value="connection"> A connection between two roads</label>
+    </fieldset>
+    <div id="matchRow" class="row" hidden>
+      <button id="match" class="plain">Connect and match: carry the road across</button>
+    </div>
+  </section>
+
+  <section id="junctionCard" class="card" hidden>
+    <h2 id="jtitle">Junction</h2>
+    <p id="jasked" class="muted asked" hidden></p>
+    <p id="jsummary"></p>
+    <ul id="jchanges" class="changes" hidden></ul>
+    <ol id="jlegs" class="items"></ol>
+    <div class="row wrap">
+      <label>Control <select id="jcontrol"><option value="none">none</option><option value="signal">traffic signals</option><option value="stop">stop signs</option></select></label>
+      <label><input type="checkbox" id="jcross"> Crosswalks</label>
+    </div>
+    <div class="row"><button id="jcancel" class="plain" hidden>Cancel</button></div>
+  </section>
+
+  <section id="crossingCard" class="card" hidden>
+    <h2 id="ctitle">Intersection</h2>
+    <p id="casked" class="muted asked" hidden></p>
+    <p id="csummary"></p>
+    <ul id="cchanges" class="changes" hidden></ul>
+    <div class="row wrap">
+      <label>What is it
+        <select id="ctreat">
+          <optgroup label="At the same level">
+            <option value="signal">Lighted intersection (traffic signals)</option>
+            <option value="two-way-stop">Two-way stop (the side road stops)</option>
+            <option value="four-way-stop">Four-way stop</option>
+            <option value="uncontrolled">No control</option>
+            <option value="driveway">Driveway or side entrance</option>
+            <option value="roundabout">Roundabout</option>
+          </optgroup>
+          <optgroup label="On a road">
+            <option value="median-opening">Median opening / U-turn crossover</option>
+            <option value="midblock-crossing">Mid-block pedestrian crossing</option>
+            <option value="railroad">Railroad crossing</option>
+          </optgroup>
+          <optgroup label="Ramps and bridges">
+            <option value="on-ramp">On-ramp (merge, acceleration lane)</option>
+            <option value="off-ramp">Off-ramp (exit, deceleration lane)</option>
+            <option value="overpass">Overpass / underpass</option>
+            <option value="cloverleaf">Cloverleaf (overpass and loop ramps)</option>
+          </optgroup>
+        </select>
+      </label>
+    </div>
+    <div class="row wrap">
+      <label id="cminorRow" hidden>Road that stops <select id="cminor"></select></label>
+      <label id="coverRow" hidden>Road on top <select id="cover"></select></label>
+      <label id="cmainRow" hidden>Road that stays <select id="cmain"></select></label>
+      <label id="cdiaRow" hidden>Width <input id="cdia" type="number" min="20" max="120" step="2" value="40"> m</label>
+      <label id="copenRow" hidden>Opening <input id="copen" type="number" min="8" max="40" step="1" placeholder="road width"> m</label>
+      <label id="caccelRow" hidden>Speed-change lane <input id="caccel" type="number" min="30" max="400" step="10" value="120"> m</label>
+      <label id="ccrossRow"><input type="checkbox" id="ccross"> Crosswalks</label>
+      <label id="cbeaconRow" hidden><input type="checkbox" id="cbeacon"> Flashing beacons</label>
+      <label id="cgatesRow" hidden><input type="checkbox" id="cgates"> Gates</label>
+      <label id="cslipRow"><input type="checkbox" id="cslip"> Right-turn slip lanes</label>
+      <label id="cgoreRow" hidden><input type="checkbox" id="cgore"> Gore with chevrons</label>
+    </div>
+    <div class="row wrap" id="cpocketRow">
+      <label>Turn pockets
+        <select id="cpocket">
+          <option value="none">None</option>
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+          <option value="both">Left and right</option>
+        </select>
+      </label>
+      <label id="cpocketLenRow">Length <input id="cpocketlen" type="number" min="5" max="150" step="5" value="30"> m</label>
+    </div>
+    <div class="row wrap" id="cstubRow">
+      <label>A short stub past the crossing
+        <select id="cstub">
+          <option value="keep">Keep it as a dead end (four-way)</option>
+          <option value="trim">Trim it off (three-way)</option>
+        </select>
+      </label>
+    </div>
+    <div class="row"><button id="ccancel" class="plain" hidden>Cancel</button></div>
+  </section>
+
+  <section id="hubCard" class="card" hidden>
+    <h2 id="htitle">Roads meeting at a point</h2>
+    <p id="hasked" class="muted asked" hidden></p>
+    <p id="hsummary"></p>
+    <ul id="hchanges" class="changes" hidden></ul>
+    <div class="row wrap">
+      <label>What is it
+        <select id="htreat">
+          <option value="signal">Lighted intersection (traffic signals)</option>
+          <option value="two-way-stop">Two-way stop (the narrowest road stops)</option>
+          <option value="four-way-stop">All-way stop</option>
+          <option value="uncontrolled">No control</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="hcross"> Crosswalks</label>
+      <label>A short stub
+        <select id="hstub">
+          <option value="keep">Keep as a dead end</option>
+          <option value="trim">Trim it off</option>
+        </select>
+      </label>
+    </div>
+    <div class="row"><button id="hcancel" class="plain" hidden>Cancel</button></div>
+  </section>
+
+  <section id="transitionCard" class="card" hidden>
+    <h2>Lane changes on this line</h2>
+    <ol id="tlist" class="items"></ol>
+    <div class="row"><button id="topen" class="plain">Add or drop a lane on this line…</button></div>
+    <div id="tform" hidden>
+      <p id="tasked" class="muted asked" hidden></p>
+      <div class="row wrap">
+        <label>Change <select id="tchange"><option value="add">Add a lane</option><option value="drop">Drop a lane</option></select></label>
+        <label>On the <select id="tside"><option value="right">Right (toward the edge)</option><option value="left">Left (toward the centre)</option></select></label>
+        <label>Lanes <select id="tdir"><option value="fwd">with the line</option><option value="back">against the line</option></select></label>
+        <label>How many <select id="tcount"><option>1</option><option>2</option><option>3</option></select></label>
+      </div>
+      <div class="row wrap">
+        <label>Starts <input id="tat" type="number" min="0" step="10" placeholder="middle"> m from the start</label>
+        <label>Taper <input id="tlen" type="number" min="10" step="5" placeholder="by speed"> m</label>
+        <label>Speed <input id="tspeed" type="number" min="15" max="80" step="5" value="35"> mph</label>
+      </div>
+      <p id="tsummary"></p>
+      <ul id="tchanges" class="changes" hidden></ul>
+      <div class="row"><button id="tdone" class="plain">Done</button></div>
+    </div>
+  </section>
+
+  <section id="road" class="card" hidden>
+    <div id="bar" class="bar" aria-label="Cross-section to scale"></div>
+    <ol id="items" class="items"></ol>
+    <p id="total" class="muted"></p>
+  </section>
+
+  <section id="proposal" class="card proposal" hidden>
+    <h2>Proposed change</h2>
+    <p id="asked" class="muted asked"></p>
+    <ul id="pchanges" class="changes" hidden></ul>
+    <div id="pbar" class="bar"></div>
+    <ol id="pitems" class="items"></ol>
+    <p id="ptotal" class="muted"></p>
+    <div class="row">
+      <button id="cancel" class="plain">Cancel</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <label for="words" id="wordsLabel">Describe the road, or the change you want</label>
+    <textarea id="words" rows="3" placeholder="e.g. a bike lane, an apron, two south lanes, a 3 m grassy curbed margin, two north lanes, apron, bike lane"></textarea>
+    <div class="row">
+      <button id="propose">Propose</button>
+      <span id="thinking" class="muted" hidden>Thinking…</span>
+    </div>
+    <details>
+      <summary>Type the shorthand yourself</summary>
+      <input id="shorthand" type="text" spellcheck="false" placeholder="facing N: bike-lane | lane S x2 | margin 3 | lane N x2 | bike-lane">
+      <button id="use" class="plain">Use this</button>
+      <p class="muted">Elements: lane, turn-pocket, bike-lane, apron, shoulder, margin, median, sidewalk, parking-lane … Direction N S E W, width 3 or 10ft, repeat x2.</p>
+    </details>
+  </section>
+
+  <section class="card draw">
+    <fieldset id="scope" hidden>
+      <label><input type="radio" name="scope" value="segment" checked> <span id="scope-all">All pieces of this road</span></label>
+      <label><input type="radio" name="scope" value="selected"> Only the selected piece</label>
+    </fieldset>
+    <button id="draw" class="primary">Draw</button>
+    <p id="message" class="message" role="status"></p>
+  </section>
+</main>
+<script src="/app.js" type="module"></script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "filter", "exporter", "importer"]
+members = ["core", "filter", "exporter", "importer", "cli"]
 resolver = "3"
 
 [workspace.package]

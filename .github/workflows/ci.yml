@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
+          rustup default stable
+
+      - name: Rust tests
+        run: cargo test --release --workspace
+
+      - name: Build the plug-ins (WebAssembly) and the helper
+        run: |
+          cargo build --release --target wasm32-unknown-unknown --workspace
+          cargo build --release -p road-builder-cli
+
+      - name: Panel tests
+        run: node --test panel/test/
+
+      - name: Standards database is valid and its document is up to date
+        run: |
+          node scripts/standards.mjs check
+          node scripts/standards.mjs md
+          git diff --exit-code docs/STANDARDS.md

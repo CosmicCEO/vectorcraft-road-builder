@@ -1,0 +1,15 @@
+[package]
+name = "road-builder-cli"
+description = "Native command-line helper: parse, validate and edit road cross-sections (used by the companion panel and by agents)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "road-builder-cli"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true
+road-builder-core.workspace = true

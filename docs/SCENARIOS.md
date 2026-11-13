@@ -1,0 +1,75 @@
+# Intersection scenarios
+
+What the plug-in can build where roads meet, what is planned, and the rules each one follows. Update this file in the same commit that
+changes a scenario. Everything is in metres; `r` is the kerb radius, `cw` the crosswalk depth (3 m), `gap` the space between box and crosswalk (1 m).
+Sizes are typical values, not surveyed ones. The FHWA MUTCD is the authoritative US source for markings; the marking dimensions here were checked against it (see "Standards" at the end and `docs/STANDARDS.md`).
+
+## Built
+
+### Crossing: two roads cross (`core/src/crossing.rs`, stored as `crossings.<id>`)
+The gesture: draw one road across another, select both, press **Draw this intersection** in the panel. Any angle, curved roads allowed (the
+local direction at the crossing point is used). The paved box is the parallelogram where the two bands overlap, a quarter metre larger on every
+side so it covers the roads' edge lines. Kerb returns are true arcs of radius `r` (tangent length `r / tan(theta / 2)`).
+
+| Treatment | What is drawn |
+|---|---|
+| `signal` (lighted) | Stop bar across the inbound lanes of each arm, a signal head at the driver's right-hand kerb, optional crosswalks. |
+| `two-way-stop` | Stop bar and stop sign on the minor road only (`minor`, else the narrower road). |
+| `four-way-stop` | Stop bar and sign on every arm. |
+| `uncontrolled` | Box, kerb returns, optional crosswalks. |
+| `overpass` | The road named in `over` is redrawn across the other as a deck with parapets and abutments. No crosswalks or stop bars. An underpass is the same thing from the road below. |
+| `roundabout` | Counter-clockwise single-lane ring (`diameter`, default 40), central island with apron, splitter islands, yield lines, optional crosswalks. |
+| `cloverleaf` | The overpass plus four loop ramps: see "Added in 0.5". |
+
+Rules that apply to the at-grade treatments:
+- **Which side traffic enters from.** Right-hand traffic. Before the crossing, a road's `fwd` lanes enter; after it, the `back` lanes enter. The stop bar spans only those lanes, and the signal head or sign stands at the driver's right.
+- **Median cap.** A median, margin or verge in the middle of a road ends in a kerbed nose just past the crosswalk (0.3 m beyond it; a metre from the box when there are no crosswalks). The cap starts at the crossing centre, because on an oblique crossing the box edge is nearer than its far corner.
+- **Stubs.** A road that runs under `stub_length` (default 25 m) past the crossing centre on one side is a stub. `keep` (default) draws a kerb across its end: a four-way with a dead end. `trim` cuts the built road at the nearer far corner of the box and stops the through road's paving at its outer travel lane on that side, so its far kerb, bike lane and verge carry on: a three-way. No kerb return, crosswalk, stop bar or signal is drawn for the trimmed arm. The drawn line is never cut. A road short on both ends is a short road, not a stub.
+- **Not parallel.** Roads within about 10 degrees of each other do not make an intersection (a note says so).
+- Notes (problems in plain words) are returned by `crossing::build` and `hub::build`; the panel does not show them yet.
+
+### Junction: a connecting line between two road pieces (`core/src/junction.rs`, stored as `junctions.<id>`)
+A short line named `junction.<id>` joins two road pieces; the road carries through. Up to two side legs (a T or a four-way at right angles), each with its own cross-section and length; control none, signal or stop; crosswalks; kerb radius. The main road's median also caps short of the crosswalk. "Connect and match" is a junction with no legs.
+
+### Added in 0.5 (all in `core/src/crossing.rs`, `core/src/scenarios.rs` and `core/src/hub.rs`)
+
+**Roads that only touch.** A side road drawn up to the kerb, a driveway or a ramp does not have to cross: if one road's end, carried straight on for 30 m, meets the other, that is the intersection (`reach_*` is false for the road that stops short). That road is always trimmed on its missing side and its drawing is carried on to the far travel lane of the other road, under the box, so it meets the pavement. Offset tees are simply two crossings on one road, one per side road; a skewed tee is an oblique crossing.
+
+| Scenario | How it is drawn |
+|---|---|
+| **Turn pockets** (`pocket` none/left/right/both, `pocket_length` 30, `pocket_taper` 15) | A pocket is a 3.3 m pavement strip beside the inbound lanes from the box edge to `pocket_length`, then a taper back to the lane edge, with a dashed lane line, a solid outer line and an arrow. A **left** pocket is cut into a median, margin or centre strip and needs 3.3 m of it (otherwise a note says so and none is drawn); a **right** pocket widens the road outward. Drawn before the crosswalk so the crosswalk lies over it. |
+| **Driveway** (`driveway`) | An uncontrolled three-way with a 1.5 m kerb return (instead of 6 m) and no stop bars. Paving covers the through road's near kerb, bike lane and apron across the driveway's width but not its far kerb. |
+| **Slip lanes** (`slip`, `slip_radius` 15) | At each kerb corner the return is rounded with the big radius and a triangular island 4 m inside it, kerbed. |
+| **Median opening** (`median-opening`, `opening`, default the cross road's width) | The divided road (`main`, else the road with an interior median) has its median opened `opening` metres (8 to 40), half each way from the crossing, with a kerbed nose at each end. The other line only says where: it is cut out across the divided road (a *gap* trim leaves up to two pieces, the second named `.part2`). A road with no median reports a note. |
+| **On-ramp / off-ramp** (`on-ramp`, `off-ramp`, `accel_length` 120, `accel_taper` 40) | An uncontrolled joining with no kerb return and a 3.6 m speed-change lane beside the through road's outer travel lane: downstream of the join for an on-ramp, upstream for an off-ramp ("downstream" is along the line on the right-hand side, since right-hand lanes run with it). |
+| **Mid-block crossing** (`midblock-crossing`, `beacon`) | Crosswalk bars over the lanes only (a median stays a refuge), a yield line (white triangles) 6.2 m before it for each direction (MUTCD 20 to 50 ft, uncontrolled), flashing beacons 0.9 m beyond each kerb. The marker line is cut out across the road. |
+| **Railroad** (`railroad`, `gates`) | The line with the new `railway` element (4 m ballast) crosses the road: rubber crossing panel, ties every 0.6 m, two rails 1.435 m apart running 6 m past the panel, a stop line 4.6 m (15 ft, the MUTCD minimum) from the nearest rail on each side, a crossbuck and lamp at the driver's right, and a gate arm across the inbound lane if `gates`. Needs the roads to be more than about 10 degrees apart. |
+| **Cloverleaf** (`cloverleaf`, `over`) | The overpass plus four 270-degree one-lane loop ramps, one per quadrant, each tangent to the outer edge of both roads (centreline radius 40 m, 5 m wide), with a grass infield and a 70 m speed-change strip along each road. Needs roads within about 20 degrees of a right angle. The diagonal connectors of a full interchange are **not** drawn (a note says so). |
+| **Three or more roads** (`hubs.<id>`, `hub.rs`) | Each road contributes an arm per side where it runs on at least 3 m (a road that stops there contributes one). Arms are sorted by bearing; the corner between neighbours is where one's left kerb line meets the next one's right kerb line; each corner gets a kerb return; every arm gets the usual crosswalk, stop bar and signal or sign. Where two neighbouring arms point opposite ways (a road side with no leg) the core stops at the outer travel lane, keeping the far kerb. Roads that stop short are carried on to the core; stubs follow `stub`/`stub_length`. Treatments: signal, two-way stop (narrowest road or `minor`), all-way stop, uncontrolled. 3 to 8 roads. |
+
+Geometry checks: every scenario has native tests with hand-worked positions (`core/tests/crossings.rs`, `core/tests/hubs.rs`) and was rendered headless at 10x and looked at.
+
+### Lane transitions (0.6, `core/src/transition.rs`, stored as `transitions.<road id>`)
+A road gains or loses lanes in one direction, on the driver's left (toward the centre of the road, in both directions, with right-hand traffic) or right
+(toward the edge). Select one line of a described road in the panel and use **Add or drop a lane on this line**, or describe it ("the right lane ends after
+300 m"). A transition is `{piece, at, change add|drop, side left|right, direction fwd|back, count 1-3, length, speed, to}`; `at` is metres from the start of
+that line (left out: the middle) and `piece` which line of the road (the panel fills it in).
+- **Taper length:** `length`, or the MUTCD lane-reduction formula (3B.12): `L = W x S` at 45 mph or more, `W x S^2 / 60` below, never under 100 ft; `speed` defaults to 35 mph (73.5 m for a 3.6 m lane).
+- **How it is drawn:** the line is cut into a plain stretch before, the taper, and a plain stretch after (named `gen.road.<id>.<piece>.taper1`, `.after1` ...). The taper overlays the two cross-sections: elements that exist in both are matched, a lane that exists only after widens from nothing, one that exists only before narrows to nothing, and every edge slides linearly. The elements the two sides share keep their place at the joints, so the road does not drift sideways: adding a lane on the right moves the right edge out and leaves everything else where it was; dropping the lane nearest the centre closes the gap from the outer edge.
+- **Which lane:** it is the outermost lane of that direction on that side (nearest the centre for left, nearest the edge for right), even when several lanes are identical. 1 to 4 lanes and back is a series of transitions; a drop cannot take the last lane in a direction.
+- **Limits:** a taper is drawn by sampling the line every 2 m, so keep tapers on gentle curves; a transition on a line that crossings trim at its start counts `at` from the trimmed start; overlapping tapers are skipped with a note.
+
+### Diverge and converge (gore, on the ramp treatments)
+`on-ramp` (also "merge", "converge") and `off-ramp` (also "diverge", "exit") work on either side: the ramp lies on the side of the through road where its line is, and the speed-change lane follows the direction the traffic beside it runs (right-hand traffic). The **gore** (`gore`, default on, `gore_length` 30 m) is the paved neutral area between the road's travel edge and the ramp's edge nearer the road, filled and marked with white chevrons 0.31 m (12 in) wide at 40 degrees to the lines, pointing toward approaching traffic (MUTCD 3B.25). Its nose is where the ramp's edge meets the road's travel edge; a diverge's gore widens downstream of the nose, a converge's upstream. It is left out where the ramp meets the road at a steep angle.
+
+## Still planned
+- Yield signs and priority control on the minor road of a roundabout approach; pedestrian refuge islands at mid-block crossings on roads without a median.
+- Full cloverleaf connectors, collector-distributor roads, diamond and diverging-diamond interchanges.
+- Curved ramps that follow the drawn line (ramp strips are straight along the through road); a gore between two roads that split in a Y (both continuing); lane transitions that cross a junction.
+- Signal phasing and school-zone beacons (20 mph when flashing), from the traffic tool's own list.
+
+## How to add one
+See `CLAUDE.md` in the repo root ("Adding an intersection scenario").
+
+## Standards
+`library/standards.json` is the database of design and dimension standards (55 entries, each with its source, section, a verbatim quote and a verified / verified-secondary / unverified status); `docs/STANDARDS.md` is generated from it (`node scripts/standards.mjs md`) and `node scripts/standards.mjs check` validates it. The dimensions the drawing code takes from a standard are named constants in `core/src/standards.rs`, and `core/tests/standards.rs` checks each against the limits in the database. No known gaps remain; a new one must be recorded in the database. (The primary signal head stands at least 40 ft beyond the stop line on the far side; the head at the stop line is the supplemental near-side one.) Lane, bike-lane and kerb-radius widths are typical values, not standards (the MUTCD sets none; the AASHTO Green Book, which does, is copyrighted and was not available).

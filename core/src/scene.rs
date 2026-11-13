@@ -39,7 +39,7 @@ pub struct Scene {
 }
 
 /// A junction marker's first name segment is one capital letter and a number (`J7`, `C12`).
-fn is_junction_name(name: &str) -> bool {
+pub fn is_junction_name(name: &str) -> bool {
     let id = name.split('.').next().unwrap_or("");
     id.len() > 1 && id.starts_with(|c: char| c.is_ascii_uppercase()) && id[1..].chars().all(|c| c.is_ascii_digit())
 }

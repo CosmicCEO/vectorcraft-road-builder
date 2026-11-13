@@ -18,6 +18,44 @@ pub fn dot(a: P, b: P) -> f64 {
     a[0] * b[0] + a[1] * b[1]
 }
 
+/// Splits a polyline into dashes: `on` metres painted, `off` metres skipped, measured along the line itself.
+pub fn dash_polyline(pts: &[P], on: f64, off: f64) -> Vec<Vec<P>> {
+    let period = on + off;
+    let mut out: Vec<Vec<P>> = Vec::new();
+    let mut run: Vec<P> = Vec::new();
+    let mut pos = 0.0; // distance along the line at the start of the current segment
+    for w in pts.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let len = (b[0] - a[0]).hypot(b[1] - a[1]);
+        if len <= 0.0 {
+            continue;
+        }
+        // Walk the segment, cutting at every point where the pattern switches between paint and gap.
+        let mut at = 0.0;
+        while at < len {
+            let phase = (pos + at) % period;
+            let (painting, until) = if phase < on { (true, on - phase) } else { (false, period - phase) };
+            let step = until.min(len - at);
+            let (p, q) = (at, at + step);
+            let lerp = |t: f64| [a[0] + (b[0] - a[0]) * t / len, a[1] + (b[1] - a[1]) * t / len];
+            if painting {
+                if run.is_empty() {
+                    run.push(lerp(p));
+                }
+                run.push(lerp(q));
+            } else if !run.is_empty() {
+                out.push(std::mem::take(&mut run));
+            }
+            at += step.max(1e-9);
+        }
+        pos += len;
+    }
+    if run.len() >= 2 {
+        out.push(run);
+    }
+    out
+}
+
 /// Centre of the bounding box of `pts`.
 pub fn bounds_center(pts: &[P]) -> Option<P> {
     let first = *pts.first()?;
