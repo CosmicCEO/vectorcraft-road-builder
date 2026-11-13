@@ -4,6 +4,7 @@ pub mod abi;
 pub mod builder;
 pub mod crossing;
 pub mod crosssection;
+pub mod scenarios;
 pub mod export;
 pub mod geom;
 pub mod junction;

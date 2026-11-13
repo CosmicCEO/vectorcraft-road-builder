@@ -169,7 +169,7 @@ fn problems_are_reported_in_plain_words() {
 #[test]
 fn a_crossing_description_is_checked() {
     let ok = CrossingSpec::from_json(&signals()).unwrap();
-    assert_eq!((ok.roads.clone(), ok.radius), (["a".to_string(), "b".to_string()], 6.0));
+    assert_eq!((ok.roads.clone(), ok.radius()), (["a".to_string(), "b".to_string()], 6.0));
     assert!(ok.summary().contains("traffic signals, crosswalks"));
     let err = |v: Value| CrossingSpec::from_json(&v).unwrap_err();
     assert!(err(json!({"roads": ["a"]})).contains("exactly two roads"));
@@ -184,7 +184,7 @@ fn a_crossing_description_is_checked() {
     // The older control field still reads: stop means a two-way stop if a minor road is named, otherwise a four-way stop.
     assert_eq!(CrossingSpec::from_json(&json!({"roads": ["a", "b"], "control": "stop", "minor": "b"})).unwrap().treatment.name(), "two-way-stop");
     assert_eq!(CrossingSpec::from_json(&json!({"roads": ["a", "b"], "control": "stop"})).unwrap().treatment.name(), "four-way-stop");
-    assert_eq!(CrossingSpec::from_json(&json!({"roads": ["a", "b"], "radius": 99})).unwrap().radius, 20.0);
+    assert_eq!(CrossingSpec::from_json(&json!({"roads": ["a", "b"], "radius": 99})).unwrap().radius(), 20.0);
 }
 
 #[test]
@@ -371,4 +371,189 @@ fn stub_words_are_read_and_checked() {
     assert!(word("fold").unwrap_err().contains("stub must be keep or trim"));
     assert!(CrossingSpec::from_json(&json!({"roads": ["a", "b"], "stub": "trim"})).unwrap().summary().contains("short stub is trimmed (three-way)"));
     assert_eq!(CrossingSpec::from_json(&json!({"roads": ["a", "b"], "stub_length": 500})).unwrap().stub_length, 100.0);
+}
+
+// ---- Groundwork: roads that only touch, and the new modifiers ----
+
+const DIVIDED: &str = "lane S x2 | median 4 | lane N x2";
+
+fn spec_a(a_cross_section: &str, crossing: Value) -> Spec {
+    Spec::from_document_data(&json!({"segments": {"a": {"cross_section": a_cross_section}, "b": {"cross_section": TWO_LANE}}, "crossings": {"k1": crossing}}))
+}
+
+fn crossing_json(extra: Value) -> Value {
+    let mut c = json!({"roads": ["a", "b"], "treatment": "uncontrolled"});
+    for (k, v) in extra.as_object().unwrap() {
+        c[k] = v.clone();
+    }
+    c
+}
+
+#[test]
+fn a_road_that_only_touches_is_found_and_extended_to_the_pavement() {
+    // Road b stops at x = 190, ten metres short of road a's middle (x = 200), inside its pavement.
+    let touching = items(&[[-100.0, 400.0], [190.0, 400.0]]);
+    let x = crossing::find(&touching, "a", "b").expect("a road that stops at the other is still an intersection");
+    assert!((x.p[0] - 200.0).abs() < 1e-9 && (x.p[1] + 400.0).abs() < 1e-9);
+    assert!(x.reach_a && !x.reach_b, "only road b stops short");
+    let sp = spec(json!({"roads": ["a", "b"], "treatment": "signal", "crosswalks": true}));
+    let (out, notes) = run(&touching, &sp);
+    assert!(notes.is_empty(), "{notes:?}");
+    let n = names(&out);
+    assert!(!n.iter().any(|x| x.contains(".b.after") || x.contains("deadend")), "a touching road is a three-way, whatever the stub choice: {n:?}");
+    assert!(n.iter().any(|x| x == "gen.crossing.k1.crosswalk.b.before") && !n.iter().any(|x| x == "gen.crossing.k1.kerb.2" || x == "gen.crossing.k1.kerb.3"));
+    // Its drawing is carried on to the far travel lane of road a (x = 208.7), under the box.
+    let trims = crossing::trims(&touching, &sp);
+    assert_eq!(trims.len(), 1);
+    assert!((trims[0].dist - 8.7).abs() < 1e-3);
+    let mut out = Out::new();
+    road_builder_core::roads::build_clipped(&touching, &sp, &trims, &mut out);
+    let v: Value = serde_json::from_str(&out.finish()).unwrap();
+    let (lo, hi) = bbox(&pts(&v, "gen.road.b.1.surface.0.lane"));
+    assert!((lo[0] + 100.0).abs() < 1e-3 && (hi[0] - 208.7).abs() < 0.01, "{lo:?} {hi:?}");
+    // A road that stops more than 30 m short does not meet the other.
+    assert!(crossing::find(&items(&[[-100.0, 400.0], [100.0, 400.0]]), "a", "b").is_none());
+}
+
+#[test]
+fn pocket_words_and_the_new_spec_fields_are_read() {
+    use road_builder_core::crossing::{Pocket, Treatment};
+    let read = |v: Value| CrossingSpec::from_json(&crossing_json(v)).unwrap();
+    for (w, want) in [("left", Pocket::Left), ("right turn", Pocket::Right), ("both", Pocket::Both), ("none", Pocket::None)] {
+        assert_eq!(read(json!({"pocket": w})).pocket, want, "{w}");
+    }
+    assert_eq!(read(json!({"pocket": true})).pocket, Pocket::Both);
+    assert!(CrossingSpec::from_json(&crossing_json(json!({"pocket": "sideways"}))).unwrap_err().contains("pocket must be"));
+    let c = read(json!({"pocket": "left"}));
+    assert_eq!((c.pocket_length, c.pocket_taper, c.slip, c.slip_radius), (30.0, 15.0, false, 15.0));
+    assert_eq!(read(json!({"pocket_length": 5000})).pocket_length, 150.0);
+    // The kerb radius follows the treatment unless given.
+    assert_eq!(read(json!({})).radius(), 6.0);
+    assert_eq!(read(json!({"treatment": "driveway"})).radius(), 1.5);
+    assert_eq!(read(json!({"treatment": "on-ramp"})).radius(), 0.0);
+    assert_eq!(read(json!({"treatment": "driveway", "radius": 4})).radius(), 4.0);
+    assert_eq!(read(json!({})).to_json()["radius"], Value::Null, "an unset radius stays unset when stored");
+    for (w, want) in [("driveway", Treatment::Driveway), ("U-turn", Treatment::MedianOpening), ("exit ramp", Treatment::OffRamp), ("merge", Treatment::OnRamp), ("pedestrian crossing", Treatment::MidblockCrossing), ("level crossing", Treatment::Railroad)] {
+        assert_eq!(Treatment::parse(w).unwrap(), want, "{w}");
+    }
+    assert!(read(json!({"pocket": "left", "pocket_length": 40})).summary().contains("left turn pockets (40 m)"));
+}
+
+#[test]
+fn left_pockets_are_cut_into_the_median_and_say_when_there_is_no_room() {
+    let (out, notes) = run(&across(), &spec_a(DIVIDED, crossing_json(json!({"pocket": "left"}))));
+    // Road a has a 4 m median (x 198..202) with northbound lanes to its east. The south arm's inbound traffic is northbound: its left pocket
+    // takes the median's edge (x 198.7..202.15, taking the 0.15 m cover over the lane edge) from the box edge (3.6 m) out 30 m, then tapers 15 m.
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.pocket.a.before.left"));
+    assert!((lo[0] - 198.7).abs() < 1e-3 && (hi[0] - 202.15).abs() < 1e-3 && (lo[1] - 403.6).abs() < 1e-3 && (hi[1] - 448.6).abs() < 1e-3, "{lo:?} {hi:?}");
+    let n = names(&out);
+    for part in ["lane-line", "edge", "arrow"] {
+        assert!(n.iter().any(|x| *x == format!("gen.crossing.k1.pocket.a.before.left.{part}")), "{part}");
+    }
+    assert!(n.iter().any(|x| x == "gen.crossing.k1.pocket.a.after.left"), "both ends of the road");
+    // Road b has no median: a note per approach, and nothing drawn for it.
+    assert_eq!(notes.iter().filter(|n| n.contains("no median or centre strip wide enough")).count(), 2, "{notes:?}");
+    assert!(!n.iter().any(|x| x.contains("pocket.b.")));
+}
+
+#[test]
+fn right_pockets_widen_the_road_outward() {
+    let (out, notes) = run(&across(), &spec_a(DIVIDED, crossing_json(json!({"pocket": "right"}))));
+    assert!(notes.is_empty(), "{notes:?}");
+    // Southern arm of road a, northbound traffic: its right is east. The pocket lies beyond the lane edge (x 9.2 from the middle): x 209.05..212.5.
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.pocket.a.before.right"));
+    assert!((lo[0] - 209.05).abs() < 1e-3 && (hi[0] - 212.5).abs() < 1e-3, "{lo:?} {hi:?}");
+    // Road b's arms get right pockets too (always room: the road is widened).
+    assert!(names(&out).iter().any(|x| x == "gen.crossing.k1.pocket.b.before.right"));
+}
+
+#[test]
+fn a_pocket_is_marked_with_a_dashed_lane_line_and_stays_clear_of_the_crosswalk_order() {
+    let (out, _) = run(&across(), &spec_a(DIVIDED, crossing_json(json!({"pocket": "left", "crosswalks": true}))));
+    let n = names(&out);
+    let at = |name: &str| n.iter().position(|x| x == name).unwrap_or_else(|| panic!("no {name}"));
+    assert!(at("gen.crossing.k1.pocket.a.before.left") < at("gen.crossing.k1.crosswalk.a.before"), "the crosswalk is drawn over the pocket, not under it");
+}
+
+#[test]
+fn slip_lanes_round_each_corner_with_a_big_radius_and_an_island() {
+    let (out, notes) = run(&across(), &spec(json!({"roads": ["a", "b"], "treatment": "uncontrolled", "slip": true, "slip_radius": 15})));
+    assert!(notes.is_empty(), "{notes:?}");
+    let n = names(&out);
+    for k in 1..=4 {
+        for part in [format!("kerb.{k}"), format!("island.{k}"), format!("island.{k}.kerb"), format!("corner.{k}")] {
+            assert!(n.iter().any(|x| *x == format!("gen.crossing.k1.{part}")), "missing {part}");
+        }
+        let arc = pts(&out, &format!("gen.crossing.k1.kerb.{k}"));
+        assert!((circumradius(arc[0], arc[6], arc[12]) - 15.0).abs() < 0.02, "corner {k}: the outer kerb is a 15 m arc");
+        // The island lies inside the corner: smaller than the fillet it sits in.
+        assert!(area(&pts(&out, &format!("gen.crossing.k1.island.{k}"))) < area(&pts(&out, &format!("gen.crossing.k1.corner.{k}"))));
+    }
+    // Slip lanes off: the ordinary 6 m return.
+    let (plain, _) = run(&across(), &spec(json!({"roads": ["a", "b"], "treatment": "uncontrolled"})));
+    assert!(!names(&plain).iter().any(|x| x.contains("island")));
+}
+
+#[test]
+fn a_driveway_meets_the_road_with_a_small_return_and_no_marks() {
+    // A 39 m driveway runs up to road a's west edge (it ends at x = 189; road a's middle is x = 200).
+    let drive = items(&[[150.0, 400.0], [189.0, 400.0]]);
+    let (out, notes) = run(&drive, &spec(json!({"roads": ["a", "b"], "treatment": "driveway", "crosswalks": true, "pocket": "none"})));
+    assert!(notes.is_empty(), "{notes:?}");
+    let n = names(&out);
+    for want in ["box", "kerb.1", "kerb.4", "corner.1", "corner.4"] {
+        assert!(n.iter().any(|x| *x == format!("gen.crossing.k1.{want}")), "missing {want}: {n:?}");
+    }
+    assert!(!n.iter().any(|x| x.contains("kerb.2") || x.contains("kerb.3") || x.contains("stop") || x.contains("signal") || x.contains("sign.")), "a driveway has no control and no return on the far side: {n:?}");
+    // The crosswalk option is honoured on its own (a driveway can have one across it); nothing else is added.
+    assert!(n.iter().any(|x| x == "gen.crossing.k1.crosswalk.b.before"));
+    for k in [1, 4] {
+        let arc = pts(&out, &format!("gen.crossing.k1.kerb.{k}"));
+        assert!((circumradius(arc[0], arc[6], arc[12]) - 1.5).abs() < 0.01, "a driveway's kerb return is a 1.5 m arc");
+    }
+    // Its paving covers road a's west edge, bike lane and apron across the driveway's width, but not the far (east) kerb and bike lane.
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.box"));
+    assert!((lo[0] - 188.95).abs() < 0.01 && (hi[0] - 208.95).abs() < 0.01, "{lo:?} {hi:?}");
+}
+
+#[test]
+fn offset_tees_are_two_separate_three_ways_on_one_road() {
+    // Road a runs north; side road b meets it from the west at y = 400 and side road c from the east at y = 450 (50 m apart).
+    let line = |id, name: &str, pts: &[[f64; 2]]| Item { id: Some(id), name: name.into(), subs: vec![pts.to_vec()] };
+    let its = vec![line(1, "road.a", &[[200.0, 700.0], [200.0, 100.0]]), line(2, "road.b", &[[150.0, 400.0], [189.0, 400.0]]), line(3, "road.c", &[[211.0, 450.0], [250.0, 450.0]])];
+    let sp = Spec::from_document_data(&json!({
+        "segments": {"a": {"cross_section": STORY}, "b": {"cross_section": TWO_LANE}, "c": {"cross_section": TWO_LANE}},
+        "crossings": {"k1": {"roads": ["a", "b"], "treatment": "uncontrolled"}, "k2": {"roads": ["a", "c"], "treatment": "uncontrolled"}}
+    }));
+    let mut out = Out::new();
+    let notes = crossing::build(&its, &sp, &mut out);
+    assert!(notes.is_empty(), "{notes:?}");
+    let v: Value = serde_json::from_str(&out.finish()).unwrap();
+    let (lo1, hi1) = bbox(&pts(&v, "gen.crossing.k1.box"));
+    let (lo2, hi2) = bbox(&pts(&v, "gen.crossing.k2.box"));
+    assert!((lo1[1] - 396.15).abs() < 0.01 && (hi1[1] - 403.85).abs() < 0.01, "k1 sits at y 400: {lo1:?} {hi1:?}");
+    assert!((lo2[1] - 446.15).abs() < 0.01 && (hi2[1] - 453.85).abs() < 0.01, "k2 sits at y 450: {lo2:?} {hi2:?}");
+    // Road b comes from the west so the box reaches road a's east travel edge; road c from the east, so it reaches the west one.
+    assert!((hi1[0] - 208.95).abs() < 0.01 && (lo1[0] - 188.95).abs() < 0.01);
+    assert!((lo2[0] - 191.05).abs() < 0.01 && (hi2[0] - 211.05).abs() < 0.01, "{lo2:?} {hi2:?}");
+    // Two roads meeting the same road are two intersections: both are stored and drawn.
+    assert_eq!(sp.crossings().len(), 2);
+}
+
+#[test]
+fn a_skewed_tee_still_makes_a_box_and_true_arcs_where_they_fit() {
+    // Side road b meets road a at 30 degrees (it heads north-east and stops just short of road a's middle).
+    let s = 0.5_f64; // sin 30
+    let c = 0.866_f64;
+    let b = [[200.0 - 120.0 * c, 400.0 + 120.0 * s], [200.0 - 5.0 * c, 400.0 + 5.0 * s]];
+    let (out, notes) = run(&items(&b), &spec(json!({"roads": ["a", "b"], "treatment": "uncontrolled", "radius": 6})));
+    assert!(notes.is_empty(), "{notes:?}");
+    assert!(area(&pts(&out, "gen.crossing.k1.box")) > 100.0);
+    // The obtuse corner gets its 6 m arc; the acute one is too sharp to round (the road simply runs out along the kerb).
+    let arcs: Vec<String> = names(&out).into_iter().filter(|n| n.starts_with("gen.crossing.k1.kerb.")).collect();
+    assert!(!arcs.is_empty() && arcs.len() < 4, "{arcs:?}");
+    for name in arcs {
+        let arc = pts(&out, &name);
+        assert!((circumradius(arc[0], arc[6], arc[12]) - 6.0).abs() < 0.05, "{name}");
+    }
 }
