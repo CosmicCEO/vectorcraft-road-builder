@@ -1,6 +1,9 @@
 # Road Builder for VectorCraft
 
-Draw a road as **one centerline path**; the agentic plug-in builds everything else. Three WebAssembly plug-ins for
+phase 1: Draw a road as **one centerline path**; the agentic plug-in builds everything else.
+phase 2: (to-do) import an image and create the map in vectors
+
+Three WebAssembly plug-ins for
 [VectorCraft](https://github.com/storytold/vectorcraft) (v0.24+), written in Rust, sharing one core:
 
 | Plug-in | Kind | What it does |
