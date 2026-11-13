@@ -23,7 +23,7 @@ jobs:
         run: |
           cargo test --release --workspace
           cargo build --release -p road-builder-cli
-          node --test panel/test/
+          node --test panel/test/*.test.mjs
 
       - name: Package
         run: sh scripts/package.sh "${GITHUB_REF_NAME#v}"

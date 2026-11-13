@@ -8,7 +8,7 @@ not a developer: keep chat answers short and plain. Never push to `main`; work o
 - `core/` Rust library (compiled to the plug-in and to a native CLI): `crosssection.rs` (shorthand and layout), `offset.rs`, `roads.rs`, `junction.rs`, `crossing.rs` (spec, find, trims, approach marks, at-grade, overpass, roundabout), `scenarios.rs` (median opening, mid-block, railroad, ramp lanes, cloverleaf), `hub.rs` (three or more roads), `transition.rs` (lane count changes along a line), `builder.rs` (the commands), `output.rs` (output written as text), `library/elements.json` (the 15 road elements).
 - `filter/` the plug-in's manifest and commands (version, parameters). `cli/` `road-builder-cli` (parse, edit, diff, parse-junction, parse-crossing, parse-hub, parse-transition, library): the panel uses it to check what an agent returns.
 - `panel/` zero-dependency Node server on 127.0.0.1:8787 and the page; `panel/lib/layers.mjs` sorts the drawing into layers.
-- Tests: `cargo test --release` (all Rust) and `cd panel && node --test test/` (panel, against a fake VectorCraft in `panel/test/fake-vectorcraft.mjs`).
+- Tests: `cargo test --release` (all Rust) and `cd panel && node --test test/*.test.mjs` (panel, against a fake VectorCraft in `panel/test/fake-vectorcraft.mjs`).
 
 ## Build, install, run
 - `sh scripts/build.sh` builds the wasm plug-ins (it sets RUSTC to the rustup toolchain: Homebrew's rustc has no wasm target). `cargo +stable build --release -p road-builder-cli` rebuilds the native CLI; the panel tests need it, and a stale one fails with "usage: ..." for new commands.
