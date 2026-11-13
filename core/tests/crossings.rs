@@ -258,12 +258,6 @@ fn a_roundabout_has_a_ring_islands_yield_lines_and_crosswalks() {
 }
 
 #[test]
-fn a_cloverleaf_says_it_is_not_built_yet() {
-    let (_, notes) = run(&across(), &spec(json!({"roads": ["a", "b"], "treatment": "cloverleaf"})));
-    assert!(notes.iter().any(|n| n.contains("cloverleaf") && n.contains("not built yet")), "{notes:?}");
-}
-
-#[test]
 fn the_median_ends_short_of_the_crosswalk_with_a_nose() {
     let (out, _) = run(&across(), &spec(signals()));
     // Road a has a 3 m margin in the middle (x 198.5..201.5). South arm: box edge 3.6 m from the crossing, crosswalk 1 m beyond, 3 m deep,
@@ -556,4 +550,166 @@ fn a_skewed_tee_still_makes_a_box_and_true_arcs_where_they_fit() {
         let arc = pts(&out, &name);
         assert!((circumradius(arc[0], arc[6], arc[12]) - 6.0).abs() < 0.05, "{name}");
     }
+}
+
+// ---- Median opening, mid-block crossing, railroad, ramps, cloverleaf ----
+
+fn subpaths(v: &Value, name: &str) -> usize {
+    let o = v["objects"].as_array().unwrap().iter().find(|o| o["name"] == name).unwrap_or_else(|| panic!("no object {name}"));
+    o["path"]["subpaths"].as_array().unwrap().len()
+}
+
+fn has(out: &Value, name: &str) -> bool {
+    names(out).iter().any(|n| n == name)
+}
+
+fn drawn_road(items: &[Item], sp: &Spec) -> Value {
+    let trims = crossing::trims(items, sp);
+    let mut out = Out::new();
+    road_builder_core::roads::build_clipped(items, sp, &trims, &mut out);
+    serde_json::from_str(&out.finish()).unwrap()
+}
+
+#[test]
+fn a_median_opening_cuts_the_median_and_the_marker_road_is_cut_out() {
+    let sp = spec_a(DIVIDED, crossing_json(json!({"treatment": "median-opening", "opening": 18})));
+    let (out, notes) = run(&across(), &sp);
+    assert!(notes.is_empty(), "{notes:?}");
+    // The 4 m median (x 198..202, laid 0.2 m wider each side) is opened 9 m each way from the crossing (document y 391..409), with a nose at each end.
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.opening.before.1"));
+    assert!((lo[0] - 197.8).abs() < 1e-3 && (hi[0] - 202.2).abs() < 1e-3 && (lo[1] - 400.0).abs() < 1e-3 && (hi[1] - 409.0).abs() < 1e-3, "{lo:?} {hi:?}");
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.opening.after.1"));
+    assert!((lo[1] - 391.0).abs() < 1e-3 && (hi[1] - 400.0).abs() < 1e-3, "{lo:?} {hi:?}");
+    assert!(has(&out, "gen.crossing.k1.opening.after.1.nose") && has(&out, "gen.crossing.k1.opening.before.1.nose"));
+    assert!(!names(&out).iter().any(|n| n.contains(".box") || n.contains("crosswalk") || n.contains("stop")), "nothing else is drawn");
+    // The crossover line (road b) is cut out across the divided road's 18.4 m: two pieces are left, outside it.
+    let trims = crossing::trims(&across(), &sp);
+    assert_eq!(trims.len(), 1);
+    assert!((trims[0].dist - 9.2).abs() < 1e-3 && (trims[0].gap_before.unwrap() - 9.2).abs() < 1e-3);
+    let v = drawn_road(&across(), &sp);
+    let (lo, hi) = bbox(&pts(&v, "gen.road.b.1.surface.0.lane"));
+    assert!((lo[0] + 100.0).abs() < 1e-3 && (hi[0] - 190.8).abs() < 0.01, "west piece: {lo:?} {hi:?}");
+    let (lo, hi) = bbox(&pts(&v, "gen.road.b.1.part2.surface.0.lane"));
+    assert!((lo[0] - 209.2).abs() < 0.01 && (hi[0] - 500.0).abs() < 1e-3, "east piece, named .part2 so a click still finds the road: {lo:?} {hi:?}");
+    // A road with no median cannot have one opened.
+    let (_, notes) = run(&across(), &spec_a(TWO_LANE, crossing_json(json!({"treatment": "median-opening"}))));
+    assert!(notes.iter().any(|n| n.contains("has no median to open")), "{notes:?}");
+}
+
+#[test]
+fn a_midblock_crossing_has_bars_over_the_lanes_not_the_median_and_a_stop_line_each_way() {
+    let sp = spec_a(DIVIDED, crossing_json(json!({"treatment": "midblock-crossing", "beacon": true})));
+    let (out, notes) = run(&across(), &sp);
+    assert!(notes.is_empty(), "{notes:?}");
+    // Four 3.6 m lanes, three bars each (1.2 m apart), none over the median.
+    assert_eq!(subpaths(&out, "gen.crossing.k1.crosswalk"), 12);
+    let bars = pts(&out, "gen.crossing.k1.crosswalk");
+    assert!(bars.iter().all(|p| !(p[0] > 198.0 && p[0] < 202.0)), "the median is a refuge");
+    let (lo, hi) = bbox(&bars);
+    assert!((lo[1] - 398.5).abs() < 1e-3 && (hi[1] - 401.5).abs() < 1e-3, "3 m deep, centred on the crossing: {lo:?} {hi:?}");
+    // Stop lines 6 m (half the crosswalk plus 4.5 m) from the middle, over the lanes that approach: northbound from the south, southbound from the north.
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.stop.before"));
+    assert!((lo[0] - 202.0).abs() < 1e-3 && (hi[0] - 209.2).abs() < 1e-3 && (lo[1] - 406.0).abs() < 1e-3, "{lo:?} {hi:?}");
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.stop.after"));
+    assert!((lo[0] - 190.8).abs() < 1e-3 && (hi[0] - 198.0).abs() < 1e-3 && (lo[1] - 394.0).abs() < 1e-3, "{lo:?} {hi:?}");
+    // Beacons stand 0.9 m beyond each kerb.
+    let c1 = centre(&pts(&out, "gen.crossing.k1.beacon.1"));
+    let c2 = centre(&pts(&out, "gen.crossing.k1.beacon.2"));
+    assert!((c1[0] - 189.9).abs() < 0.1 && (c2[0] - 210.1).abs() < 0.1 && (c1[1] - 400.0).abs() < 0.1, "{c1:?} {c2:?}");
+    // Without beacons there are none; the footpath line is cut out across the road.
+    let (plain, _) = run(&across(), &spec_a(DIVIDED, crossing_json(json!({"treatment": "midblock-crossing"}))));
+    assert!(!names(&plain).iter().any(|n| n.contains("beacon")));
+    assert_eq!(crossing::trims(&across(), &sp).len(), 1);
+}
+
+fn rail_spec(crossing: Value) -> Spec {
+    Spec::from_document_data(&json!({"segments": {"a": {"cross_section": TWO_LANE}, "b": {"cross_section": "railway"}}, "crossings": {"k1": crossing}}))
+}
+
+#[test]
+fn a_railroad_crossing_has_rails_ties_stop_lines_crossbucks_and_gates() {
+    let sp = rail_spec(json!({"roads": ["a", "b"], "treatment": "railroad"}));
+    let (out, notes) = run(&across(), &sp);
+    assert!(notes.is_empty(), "{notes:?}");
+    // The 7.2 m road is the one that stays (the other has the railway element). Rails 1.435 m apart run 6 m past the 3.6 m crossing panel.
+    let rails = pts(&out, "gen.crossing.k1.rails");
+    let (lo, hi) = bbox(&rails);
+    assert!((lo[0] - 190.4).abs() < 1e-3 && (hi[0] - 209.6).abs() < 1e-3 && (lo[1] - 399.28).abs() < 1e-3 && (hi[1] - 400.72).abs() < 1e-3, "{lo:?} {hi:?}");
+    assert_eq!(subpaths(&out, "gen.crossing.k1.ties"), 12, "a tie every 0.6 m across the 7.2 m road");
+    // Stop lines 4.6 m from the nearest rail (2 m from the track's middle): 6.6 m from the crossing, over the approaching lane only.
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.stop.before"));
+    assert!((lo[0] - 200.0).abs() < 1e-3 && (hi[0] - 203.6).abs() < 1e-3 && (lo[1] - 406.6).abs() < 1e-3, "{lo:?} {hi:?}");
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.stop.after"));
+    assert!((lo[0] - 196.4).abs() < 1e-3 && (hi[0] - 200.0).abs() < 1e-3 && (lo[1] - 393.4).abs() < 1e-3, "{lo:?} {hi:?}");
+    // The southern pole stands at the driver's right-hand kerb, 5 m from the crossing; a gate arm reaches across the lane to the middle.
+    let lamp = centre(&pts(&out, "gen.crossing.k1.lamp.before"));
+    assert!((lamp[0] - 205.1).abs() < 0.1 && (lamp[1] - 405.0).abs() < 0.1, "{lamp:?}");
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.gate.before"));
+    assert!((lo[0] - 200.0).abs() < 1e-3 && (hi[0] - 205.1).abs() < 1e-3, "{lo:?} {hi:?}");
+    assert!(has(&out, "gen.crossing.k1.crossbuck.after") && has(&out, "gen.crossing.k1.panel"));
+    // No gates when asked not to; the railway's ballast is cut out across the road.
+    let (open, _) = run(&across(), &rail_spec(json!({"roads": ["a", "b"], "treatment": "railroad", "gates": false})));
+    assert!(!names(&open).iter().any(|n| n.contains("gate")) && has(&open, "gen.crossing.k1.crossbuck.before"));
+    let trims = crossing::trims(&across(), &sp);
+    assert_eq!(trims.len(), 1);
+    assert!((trims[0].dist - 3.6).abs() < 1e-3);
+    // A railway that nearly runs along the road is not a crossing.
+    let along = items(&[[190.0, 700.0], [210.0, 100.0]]);
+    let (_, notes) = run(&along, &sp);
+    assert!(notes.iter().any(|n| n.contains("nearly parallel")), "{notes:?}");
+}
+
+// A one-way ramp joining road a (divided, running north) from the south-east at 25 degrees, stopping 11 m short of the road's middle.
+fn ramp_items() -> Vec<Item> {
+    items(&[[250.7, 508.8], [204.65, 409.97]])
+}
+
+fn ramp_spec(treatment: &str) -> Spec {
+    Spec::from_document_data(&json!({
+        "segments": {"a": {"cross_section": DIVIDED}, "b": {"cross_section": "lane fwd"}},
+        "crossings": {"k1": {"roads": ["a", "b"], "treatment": treatment}}
+    }))
+}
+
+#[test]
+fn an_on_ramp_adds_an_acceleration_lane_downstream_and_an_off_ramp_a_deceleration_lane_upstream() {
+    let (out, notes) = run(&ramp_items(), &ramp_spec("on-ramp"));
+    assert!(notes.is_empty(), "{notes:?}");
+    // Northbound lanes are on the east: the ramp is on the right and traffic runs north. The lane starts at the crossing (y 400), is 3.6 m wide
+    // beside the outer travel lane edge (x 9.2 from the middle), runs 80 m full width and tapers over 40 m: y 280..400, x 209.05..212.8.
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.accel"));
+    assert!((lo[0] - 209.05).abs() < 1e-3 && (hi[0] - 212.8).abs() < 1e-3 && (lo[1] - 280.0).abs() < 0.05 && (hi[1] - 400.0).abs() < 0.05, "{lo:?} {hi:?}");
+    assert!(has(&out, "gen.crossing.k1.accel.lane-line") && has(&out, "gen.crossing.k1.accel.edge"));
+    // A ramp joins at a sharp angle with no kerb return, no crosswalk, no control.
+    assert!(!names(&out).iter().any(|n| n.contains("kerb") || n.contains("crosswalk") || n.contains("stop") || n.contains("signal") || n.contains("sign.")), "{:?}", names(&out));
+    let (off, _) = run(&ramp_items(), &ramp_spec("off-ramp"));
+    let (lo, hi) = bbox(&pts(&off, "gen.crossing.k1.decel"));
+    assert!((lo[1] - 400.0).abs() < 0.05 && (hi[1] - 520.0).abs() < 0.05, "upstream of the exit: {lo:?} {hi:?}");
+    // The ramp road runs on to the pavement it joins; the line it was drawn with is untouched.
+    let trims = crossing::trims(&ramp_items(), &ramp_spec("on-ramp"));
+    assert_eq!(trims.len(), 1);
+    assert_eq!(trims[0].index, 1);
+}
+
+#[test]
+fn a_cloverleaf_is_an_overpass_with_four_loop_ramps() {
+    let two = |over: Value| Spec::from_document_data(&json!({"segments": {"a": {"cross_section": TWO_LANE}, "b": {"cross_section": TWO_LANE}}, "crossings": {"k1": over}}));
+    let sp = two(json!({"roads": ["a", "b"], "treatment": "cloverleaf", "over": "b"}));
+    let (out, notes) = run(&across(), &sp);
+    assert!(notes.iter().any(|n| n.contains("only the four loop ramps")), "{notes:?}");
+    let n = names(&out);
+    assert!(n.iter().any(|x| x.starts_with("gen.crossing.k1.deck.surface.")) && has(&out, "gen.crossing.k1.abutment.1"), "the overpass");
+    for q in 1..=4 {
+        for part in [format!("loop.{q}"), format!("loop.{q}.edges"), format!("loop.{q}.infield"), format!("loop.{q}.strip.1"), format!("loop.{q}.strip.2")] {
+            assert!(has(&out, &format!("gen.crossing.k1.{part}")), "missing {part}");
+        }
+    }
+    // Quadrant 1 (north-east): the ring's centre is 43.6 m east and north of the crossing (document 243.6, 356.4), its outer edge 42.5 m from it.
+    // It runs 270 degrees away from the crossing, so it reaches west to x 201.1, east to 286.1, north to y 313.9 and south to 398.9.
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.loop.1"));
+    assert!((lo[0] - 201.1).abs() < 0.02 && (hi[0] - 286.1).abs() < 0.02 && (lo[1] - 313.9).abs() < 0.02 && (hi[1] - 398.9).abs() < 0.02, "{lo:?} {hi:?}");
+    // Roads that cross at 60 degrees cannot have a cloverleaf.
+    let b = [[200.0 - 400.0 * 0.866, 400.0 + 400.0 * 0.5], [200.0 + 400.0 * 0.866, 400.0 - 400.0 * 0.5]];
+    let (_, notes) = run(&items(&b), &sp);
+    assert!(notes.iter().any(|n| n.contains("close to a right angle")), "{notes:?}");
 }

@@ -497,7 +497,7 @@ fn trimmed_sides(x: &Crossing, cs: &CrossingSpec) -> Vec<(usize, f64)> {
 
 /// Where each road's paved band ends, as `[(lo, hi); 2]` per arm. Normally the road's whole width; where the *other* road is trimmed to a
 /// stub-free end, the paving stops at this road's outer travel lane so its far kerb, bike lane and verge carry on (a three-way keeps them).
-fn bounds(x: &Crossing, arms: &[Arm], trimmed: &[(usize, f64)]) -> [(f64, f64); 2] {
+pub(crate) fn bounds(x: &Crossing, arms: &[Arm], trimmed: &[(usize, f64)]) -> [(f64, f64); 2] {
     let mut b = [(arms[0].lo, arms[0].hi), (arms[1].lo, arms[1].hi)];
     for &(k, sign) in trimmed {
         let o = 1 - k;
@@ -521,6 +521,9 @@ pub struct Trim {
     pub p: P,
     pub sign: f64,
     pub dist: f64,
+    /// When set, this is not a trim of one side but a gap: the road is cut out from this many metres before `p` to `dist` metres after it,
+    /// leaving up to two pieces (the line that only says where, inside the road it crosses).
+    pub gap_before: Option<f64>,
 }
 
 /// The cuts the stored crossings ask for, to be applied to the roads before they are drawn (see `clip`).
@@ -540,18 +543,18 @@ pub fn trims(items: &[Item], spec: &Spec) -> Vec<Trim> {
                 let mut reach_of: Vec<f64> = corners.iter().map(|&c| dot(scale(tangent(k), sign), sub(c, x.p))).collect();
                 reach_of.sort_by(|p, q| q.total_cmp(p));
                 // The nearer of the two far corners: everything of the stub up to there lies on the other road's pavement or in the box.
-                out.push(Trim { index: index(k), p: x.p, sign, dist: reach_of[1].max(0.0) });
+                out.push(Trim { index: index(k), p: x.p, sign, dist: reach_of[1].max(0.0), gap_before: None });
             }
         } else if cross_road_only(cs.treatment) {
             // The line that only says where (the crossover, the footpath, the railway) is cut back to the edge of the road it crosses.
-            let (m, c) = (main_index(&cs, &arms), 1 - main_index(&cs, &arms));
+            let c = 1 - main_index(&cs, &arms);
             let corners = [(arms[0].lo, arms[1].lo), (arms[0].hi, arms[1].lo), (arms[0].hi, arms[1].hi), (arms[0].lo, arms[1].hi)].map(|(ua, ub)| corner_at(&x, &arms, ua, ub));
-            let _ = m;
-            for sign in [-1.0, 1.0] {
-                let mut reach_of: Vec<f64> = corners.iter().map(|&q| dot(scale(tangent(c), sign), sub(q, x.p))).collect();
-                reach_of.sort_by(|p, q| q.total_cmp(p));
-                out.push(Trim { index: index(c), p: x.p, sign, dist: reach_of[1].max(0.0) });
-            }
+            let reach_of = |sign: f64| {
+                let mut r: Vec<f64> = corners.iter().map(|&q| dot(scale(tangent(c), sign), sub(q, x.p))).collect();
+                r.sort_by(|p, q| q.total_cmp(p));
+                r[1].max(0.0)
+            };
+            out.push(Trim { index: index(c), p: x.p, sign: 1.0, dist: reach_of(1.0), gap_before: Some(reach_of(-1.0)) });
         }
     }
     out
@@ -619,6 +622,51 @@ pub(crate) fn clip(path: &[P], t: &Trim) -> Vec<P> {
     if kept.len() < 2 { path.to_vec() } else { kept }
 }
 
+/// The path between route metres `from` and `to`.
+fn slice_path(path: &[P], from: f64, to: f64) -> Vec<P> {
+    let poly = Poly::new(path.to_vec());
+    let mut cum = vec![0.0];
+    for w in path.windows(2) {
+        cum.push(cum.last().copied().unwrap_or(0.0) + (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]));
+    }
+    let mut out = vec![poly.at(from).0];
+    out.extend(path.iter().zip(&cum).filter(|(_, c)| **c > from + 1e-6 && **c < to - 1e-6).map(|(p, _)| *p));
+    out.push(poly.at(to).0);
+    out
+}
+
+/// The pieces of a road line left to draw after the trims for it: one piece, or two where a gap was cut out of the middle.
+pub(crate) fn apply_trims(path: &[P], trims: &[&Trim]) -> Vec<Vec<P>> {
+    let mut pieces = vec![path.to_vec()];
+    for t in trims {
+        match t.gap_before {
+            None => pieces = pieces.into_iter().map(|p| clip(&p, t)).collect(),
+            Some(before) => {
+                pieces = pieces
+                    .into_iter()
+                    .flat_map(|piece| {
+                        let poly = Poly::new(piece.clone());
+                        let (s0, _, d) = poly.project(t.p);
+                        if d > 1.0 || poly.len() <= 0.0 {
+                            return vec![piece];
+                        }
+                        let (left, right) = ((s0 - before, 0.0), (s0 + t.dist, poly.len()));
+                        let mut out = Vec::new();
+                        if left.0 - left.1 > 0.5 {
+                            out.push(slice_path(&piece, left.1, left.0));
+                        }
+                        if right.1 - right.0 > 0.5 {
+                            out.push(slice_path(&piece, right.0, right.1));
+                        }
+                        out
+                    })
+                    .collect();
+            }
+        }
+    }
+    pieces
+}
+
 fn emit(items: &[Item], spec: &Spec, id: &str, cs: &CrossingSpec, out: &mut Out) -> Result<Vec<String>, String> {
     let x = find(items, &cs.roads[0], &cs.roads[1]).ok_or_else(|| format!("roads {} and {} do not cross or meet", cs.roads[0], cs.roads[1]))?;
     let arms = make_arms(spec, cs, &x)?;
@@ -634,6 +682,9 @@ fn emit(items: &[Item], spec: &Spec, id: &str, cs: &CrossingSpec, out: &mut Out)
                 notes.push(format!("no stub to trim: both roads run more than {} m past the crossing", cs.stub_length));
             }
             notes.extend(at_grade(out, &base, cs, &x, &arms, &trimmed));
+            if matches!(cs.treatment, Treatment::OnRamp | Treatment::OffRamp) {
+                notes.extend(crate::scenarios::ramp_lane(out, &base, cs, &x, &arms, &trimmed));
+            }
             // A stub that is kept ends in a kerb across its end: a dead end.
             if cs.stub == Stub::Keep {
                 for &(k, sign) in stubs.iter().filter(|s| !trimmed.contains(s)) {
@@ -814,7 +865,7 @@ fn pocket_strip(out: &mut Out, name: &str, at: &dyn Fn(f64, f64) -> P, ap: &Appr
 }
 
 /// Dashes (3 m on, 3 m off) along a line at sideways offset `u` from distance `d0` to `d1`.
-fn simplify_dashes(at: &dyn Fn(f64, f64) -> P, u: f64, d0: f64, d1: f64) -> Vec<Vec<P>> {
+pub(crate) fn simplify_dashes(at: &dyn Fn(f64, f64) -> P, u: f64, d0: f64, d1: f64) -> Vec<Vec<P>> {
     let mut dashes = Vec::new();
     let mut d = d0;
     while d < d1 {
@@ -908,7 +959,7 @@ fn at_grade(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: &[
 
 /// Overpass (or underpass): the `over` road is redrawn on top across the other as a bridge deck, with parapets and abutments.
 /// The other road is left running underneath. There is no conflict, so no crosswalks, stop bars or signals.
-fn overpass(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: &[Arm]) {
+pub(crate) fn overpass(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: &[Arm]) {
     let (a, b) = (&arms[0], &arms[1]);
     let corners = [(a.lo, b.lo), (a.hi, b.lo), (a.hi, b.hi), (a.lo, b.hi)].map(|(ua, ub)| corner_at(x, arms, ua, ub));
     let over = cs.over.clone().unwrap_or_else(|| a.id.clone());

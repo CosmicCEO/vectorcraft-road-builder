@@ -1,38 +1,219 @@
 {
-  "version": 1,
-  "note": "Typical US widths for an illustrative reconstruction, NOT a survey, and not checked here against the current MUTCD, AASHTO or local standards. Verify before relying on any number. A drawing can override any width per use.",
-  "elements": {
-    "lane":              {"label": "Travel lane",                 "width": 3.6, "role": "travel",  "directional": true,  "fill": [0.86, 0.86, 0.86], "source": "typical 12 ft"},
-    "turn-pocket":       {"label": "Turn pocket (turn lane)",     "width": 3.3, "role": "pocket",  "directional": true,  "fill": [0.80, 0.80, 0.86], "source": "typical 11 ft (10 to 12 ft)"},
-    "center-turn-lane":  {"label": "Two-way left turn lane",      "width": 3.6, "role": "pocket",  "directional": false, "fill": [0.84, 0.82, 0.70], "source": "typical 12 ft"},
-    "bus-lane":          {"label": "Bus lane",                    "width": 3.6, "role": "travel",  "directional": true,  "fill": [0.82, 0.62, 0.62], "source": "typical 12 ft"},
-    "bike-lane":         {"label": "Bike lane",                   "width": 1.5, "role": "bike",    "directional": true,  "fill": [0.70, 0.86, 0.72], "source": "typical 5 ft (4 to 6 ft)"},
-    "bike-buffer":       {"label": "Painted bike buffer",         "width": 0.9, "role": "buffer",  "directional": false, "fill": [0.93, 0.93, 0.93], "source": "typical 3 ft"},
-    "bike-path":         {"label": "Separated bike path",         "width": 3.0, "role": "bike",    "directional": false, "fill": [0.64, 0.82, 0.68], "source": "typical 10 ft"},
-    "shoulder":          {"label": "Paved shoulder",              "width": 1.8, "role": "edge",    "directional": false, "fill": [0.90, 0.90, 0.90], "source": "typical 6 ft (4 to 10 ft)"},
-    "apron":             {"label": "Apron (gutter pan)",          "width": 0.6, "role": "edge",    "directional": false, "fill": [0.92, 0.92, 0.92], "source": "typical 2 ft"},
-    "parking-lane":      {"label": "Parking lane",                "width": 2.4, "role": "parking", "directional": false, "fill": [0.88, 0.88, 0.92], "source": "typical 8 ft (7 to 9 ft)"},
-    "margin":            {"label": "Curbed grass margin",         "width": 3.0, "role": "curbed",  "directional": false, "fill": [0.72, 0.85, 0.62], "source": "owner's example, 3 m"},
-    "median":            {"label": "Raised median",               "width": 3.0, "role": "curbed",  "directional": false, "fill": [0.74, 0.84, 0.66], "source": "typical, varies widely"},
-    "painted-median":    {"label": "Painted flush median",        "width": 1.2, "role": "flush",   "directional": false, "fill": [0.88, 0.84, 0.66], "source": "typical 4 ft"},
-    "verge":             {"label": "Grass verge (planting strip)","width": 1.8, "role": "curbed",  "directional": false, "fill": [0.74, 0.86, 0.66], "source": "typical 6 ft"},
-    "sidewalk":          {"label": "Sidewalk",                    "width": 1.5, "role": "walk",    "directional": false, "fill": [0.95, 0.95, 0.93], "source": "typical 5 ft (ADA minimum 3 ft)"}
+ "version": 1,
+ "note": "Typical US widths for an illustrative reconstruction, NOT a survey, and not checked here against the current MUTCD, AASHTO or local standards. Verify before relying on any number. A drawing can override any width per use.",
+ "elements": {
+  "lane": {
+   "label": "Travel lane",
+   "width": 3.6,
+   "role": "travel",
+   "directional": true,
+   "fill": [
+    0.86,
+    0.86,
+    0.86
+   ],
+   "source": "typical 12 ft"
   },
-  "aliases": {
-    "bike": "bike-lane",
-    "cycle-lane": "bike-lane",
-    "grass": "margin",
-    "grassy-margin": "margin",
-    "curbed-margin": "margin",
-    "turn-lane": "turn-pocket",
-    "pocket": "turn-pocket",
-    "turn": "turn-pocket",
-    "travel-lane": "lane",
-    "walk": "sidewalk",
-    "gutter": "apron",
-    "gutter-pan": "apron",
-    "parking": "parking-lane",
-    "tw-ltl": "center-turn-lane",
-    "flush-median": "painted-median"
+  "turn-pocket": {
+   "label": "Turn pocket (turn lane)",
+   "width": 3.3,
+   "role": "pocket",
+   "directional": true,
+   "fill": [
+    0.8,
+    0.8,
+    0.86
+   ],
+   "source": "typical 11 ft (10 to 12 ft)"
+  },
+  "center-turn-lane": {
+   "label": "Two-way left turn lane",
+   "width": 3.6,
+   "role": "pocket",
+   "directional": false,
+   "fill": [
+    0.84,
+    0.82,
+    0.7
+   ],
+   "source": "typical 12 ft"
+  },
+  "bus-lane": {
+   "label": "Bus lane",
+   "width": 3.6,
+   "role": "travel",
+   "directional": true,
+   "fill": [
+    0.82,
+    0.62,
+    0.62
+   ],
+   "source": "typical 12 ft"
+  },
+  "bike-lane": {
+   "label": "Bike lane",
+   "width": 1.5,
+   "role": "bike",
+   "directional": true,
+   "fill": [
+    0.7,
+    0.86,
+    0.72
+   ],
+   "source": "typical 5 ft (4 to 6 ft)"
+  },
+  "bike-buffer": {
+   "label": "Painted bike buffer",
+   "width": 0.9,
+   "role": "buffer",
+   "directional": false,
+   "fill": [
+    0.93,
+    0.93,
+    0.93
+   ],
+   "source": "typical 3 ft"
+  },
+  "bike-path": {
+   "label": "Separated bike path",
+   "width": 3.0,
+   "role": "bike",
+   "directional": false,
+   "fill": [
+    0.64,
+    0.82,
+    0.68
+   ],
+   "source": "typical 10 ft"
+  },
+  "shoulder": {
+   "label": "Paved shoulder",
+   "width": 1.8,
+   "role": "edge",
+   "directional": false,
+   "fill": [
+    0.9,
+    0.9,
+    0.9
+   ],
+   "source": "typical 6 ft (4 to 10 ft)"
+  },
+  "apron": {
+   "label": "Apron (gutter pan)",
+   "width": 0.6,
+   "role": "edge",
+   "directional": false,
+   "fill": [
+    0.92,
+    0.92,
+    0.92
+   ],
+   "source": "typical 2 ft"
+  },
+  "parking-lane": {
+   "label": "Parking lane",
+   "width": 2.4,
+   "role": "parking",
+   "directional": false,
+   "fill": [
+    0.88,
+    0.88,
+    0.92
+   ],
+   "source": "typical 8 ft (7 to 9 ft)"
+  },
+  "margin": {
+   "label": "Curbed grass margin",
+   "width": 3.0,
+   "role": "curbed",
+   "directional": false,
+   "fill": [
+    0.72,
+    0.85,
+    0.62
+   ],
+   "source": "owner's example, 3 m"
+  },
+  "median": {
+   "label": "Raised median",
+   "width": 3.0,
+   "role": "curbed",
+   "directional": false,
+   "fill": [
+    0.74,
+    0.84,
+    0.66
+   ],
+   "source": "typical, varies widely"
+  },
+  "painted-median": {
+   "label": "Painted flush median",
+   "width": 1.2,
+   "role": "flush",
+   "directional": false,
+   "fill": [
+    0.88,
+    0.84,
+    0.66
+   ],
+   "source": "typical 4 ft"
+  },
+  "verge": {
+   "label": "Grass verge (planting strip)",
+   "width": 1.8,
+   "role": "curbed",
+   "directional": false,
+   "fill": [
+    0.74,
+    0.86,
+    0.66
+   ],
+   "source": "typical 6 ft"
+  },
+  "sidewalk": {
+   "label": "Sidewalk",
+   "width": 1.5,
+   "role": "walk",
+   "directional": false,
+   "fill": [
+    0.95,
+    0.95,
+    0.93
+   ],
+   "source": "typical 5 ft (ADA minimum 3 ft)"
+  },
+  "railway": {
+   "label": "Railway (single track, ballast)",
+   "width": 4.0,
+   "role": "flush",
+   "directional": false,
+   "fill": [
+    0.62,
+    0.58,
+    0.53
+   ],
+   "source": "typical: ballast bed about 4 m for one track"
   }
+ },
+ "aliases": {
+  "bike": "bike-lane",
+  "cycle-lane": "bike-lane",
+  "grass": "margin",
+  "grassy-margin": "margin",
+  "curbed-margin": "margin",
+  "turn-lane": "turn-pocket",
+  "pocket": "turn-pocket",
+  "turn": "turn-pocket",
+  "travel-lane": "lane",
+  "walk": "sidewalk",
+  "gutter": "apron",
+  "gutter-pan": "apron",
+  "parking": "parking-lane",
+  "tw-ltl": "center-turn-lane",
+  "flush-median": "painted-median",
+  "rail": "railway",
+  "railroad": "railway",
+  "track": "railway",
+  "train-track": "railway"
+ }
 }

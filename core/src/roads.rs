@@ -269,8 +269,11 @@ pub fn build_clipped(items: &[Item], spec: &Spec, trims: &[crate::crossing::Trim
         let base = format!("gen.road.{id}.{piece}");
 
         // The elements are laid out for the whole line; only the drawing is cut short.
-        let drawn = trims.iter().filter(|t| t.index == index).fold(path.clone(), |p, t| crate::crossing::clip(&p, t));
-        emit(out, &base, &drawn, &placed);
+        let mine: Vec<&crate::crossing::Trim> = trims.iter().filter(|t| t.index == index).collect();
+        for (n, drawn) in crate::crossing::apply_trims(&path, &mine).iter().enumerate() {
+            // A road cut in two by a gap keeps its piece number; the second part is named `.part2` so a click on it still finds its road.
+            emit(out, &if n == 0 { base.clone() } else { format!("{base}.part{}", n + 1) }, drawn, &placed);
+        }
         let _ = Dir::Fwd; // directions are resolved in the layout; arrows come with the junction work
     }
     notes
