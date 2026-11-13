@@ -81,28 +81,59 @@ export function extractJson(reply) {
 }
 
 export function crossingSystemPrompt() {
-  return `You turn a plain-language description of how two crossing roads meet into one JSON object. Reply with the JSON object only: no explanation, no code fence.
+  return `You turn a plain-language description of how two roads meet or cross into one JSON object. Reply with the JSON object only: no explanation, no code fence.
 
-{"treatment": "signal|two-way-stop|four-way-stop|uncontrolled|overpass|roundabout|cloverleaf", "crosswalks": false, "radius": 6, "minor": null, "over": null, "diameter": 40, "stub": "keep"}
-- treatment: "signal" = lighted intersection (traffic lights); "two-way-stop" = stop signs on the minor road only; "four-way-stop" = stop signs on every approach; "uncontrolled" = nothing painted or posted; "overpass" = one road bridges the other (an underpass is the same thing seen from the road below: the road on top is "over"); "roundabout" = traffic circle; "cloverleaf" = interchange with loop ramps.
-- crosswalks: true if the description mentions crosswalks, cross walks or pedestrian crossings.
-- radius: kerb corner radius in metres (default 6).
-- minor: for a two-way stop, the id of the road that stops. Use null if the description does not say, and the narrower road will stop.
-- over: for an overpass, the id of the road that goes over. Use null if not said.
-- diameter: for a roundabout, the outside diameter in metres (default 40).
-- stub: if one road runs only a short way past the crossing, "keep" draws that short end as a dead end (a four-way intersection) and "trim" cuts it off at the other road (a three-way, T intersection). Default "keep". Use "trim" when the description says to trim, cut off or remove the stub, or asks for a three-way or T intersection.
-The two roads have the ids given in the request; "minor" and "over" must be one of those two ids or null. Leave out "roads": the program adds it.
+{"treatment": "signal", "crosswalks": false, "radius": null, "minor": null, "over": null, "main": null, "diameter": 40, "stub": "keep", "pocket": "none", "pocket_length": 30, "pocket_taper": 15, "slip": false, "opening": 18, "accel_length": 120, "beacon": false, "gates": true}
+- treatment, one of: "signal" (lighted intersection, traffic lights); "two-way-stop" (stop signs on the minor road only); "four-way-stop" (stop signs everywhere); "uncontrolled"; "driveway" (a small side entrance); "median-opening" (a gap in a median, or a U-turn crossover, on a divided road); "on-ramp" (a ramp joining with an acceleration lane, a merge); "off-ramp" (a ramp leaving, an exit, with a deceleration lane); "midblock-crossing" (a pedestrian crossing in the middle of a road, not at an intersection); "railroad" (a railway crossing, level crossing); "overpass" (one road bridges the other; an underpass is the same thing seen from below); "roundabout"; "cloverleaf" (interchange with loop ramps).
+- crosswalks: true if the description mentions crosswalks, cross walks or pedestrian crossings at an intersection.
+- radius: kerb corner radius in metres, or null for the usual (6 m, a driveway 1.5 m, a ramp none).
+- minor: for a two-way stop, the id of the road that stops; null means the narrower road.
+- over: for an overpass or cloverleaf, the id of the road that goes over; null means the first.
+- main: for a median opening, mid-block crossing, railroad or ramp, the id of the road that stays (the divided road, the road being crossed, the through road); null lets the program decide.
+- diameter: for a roundabout, the outside width in metres.
+- stub: if one road runs only a short way past the crossing, "keep" draws it as a dead end (four-way) and "trim" cuts it off at the other road (three-way, T intersection). Use "trim" when asked to trim, cut off or remove the stub, or for a three-way or T.
+- pocket: turn lanes on the approaches: "none", "left", "right" or "both". pocket_length is how long the full-width lane is (metres) and pocket_taper the length of the taper. "Twice as long" doubles pocket_length.
+- slip: true for right-turn slip lanes with a triangular island.
+- opening: the length of a median opening in metres.
+- accel_length: the length of a ramp's acceleration or deceleration lane in metres.
+- beacon: true for flashing beacons at a mid-block crossing. gates: false for a railroad crossing without gates.
+The two roads have the ids given in the request; "minor", "over" and "main" must be one of those two ids or null. Leave out "roads": the program adds it.
 
-EXAMPLE
+EXAMPLES
 Description: lighted intersection with crosswalks
-{"treatment": "signal", "crosswalks": true, "radius": 6, "minor": null, "over": null, "diameter": 40, "stub": "keep"}
+{"treatment": "signal", "crosswalks": true, "radius": null, "minor": null, "over": null, "main": null, "diameter": 40, "stub": "keep", "pocket": "none", "pocket_length": 30, "pocket_taper": 15, "slip": false, "opening": 18, "accel_length": 120, "beacon": false, "gates": true}
 
-EXAMPLE
-Description: lighted three-way, trim off the little stub
-{"treatment": "signal", "crosswalks": true, "radius": 6, "minor": null, "over": null, "diameter": 40, "stub": "trim"}
+Description: lighted three-way, trim off the little stub, with left turn pockets
+{"treatment": "signal", "crosswalks": true, "radius": null, "minor": null, "over": null, "main": null, "diameter": 40, "stub": "trim", "pocket": "left", "pocket_length": 30, "pocket_taper": 15, "slip": false, "opening": 18, "accel_length": 120, "beacon": false, "gates": true}
+
+Description: railroad crossing with gates
+{"treatment": "railroad", "crosswalks": false, "radius": null, "minor": null, "over": null, "main": null, "diameter": 40, "stub": "keep", "pocket": "none", "pocket_length": 30, "pocket_taper": 15, "slip": false, "opening": 18, "accel_length": 120, "beacon": false, "gates": true}
 
 EDITING
 When a current intersection is given, apply the requested change and return the COMPLETE updated object, keeping everything not mentioned exactly as it was.`;
+}
+
+export function hubSystemPrompt() {
+  return `You turn a plain-language description of an intersection where three or more roads meet at one point into one JSON object. Reply with the JSON object only: no explanation, no code fence.
+
+{"treatment": "signal", "crosswalks": false, "radius": null, "minor": null, "stub": "keep"}
+- treatment: "signal" (traffic lights); "two-way-stop" (the narrowest road, or the road named in minor, has stop signs); "four-way-stop" (all-way stop, stop signs on every road); "uncontrolled".
+- crosswalks: true if crosswalks are mentioned. radius: kerb corner radius in metres, or null for 6.
+- minor: the id of the road that stops for a two-way stop, or null.
+- stub: "trim" cuts off short stubs of road past the meeting point, "keep" (default) leaves them as dead ends.
+The roads have the ids given in the request. Leave out "roads": the program adds it.
+
+EXAMPLE
+Description: five-way with traffic lights and crosswalks
+{"treatment": "signal", "crosswalks": true, "radius": null, "minor": null, "stub": "keep"}
+
+EDITING
+When a current intersection is given, apply the requested change and return the COMPLETE updated object, keeping everything not mentioned exactly as it was.`;
+}
+
+export function hubUserPrompt({ description, current, roads }) {
+  const head = `The roads are "${roads.join('", "')}".`;
+  return current ? `${head}\nCurrent intersection:\n${JSON.stringify(current)}\n\nChange requested: ${description}` : `${head}\nDescription: ${description}`;
 }
 
 export function crossingUserPrompt({ description, current, roads }) {

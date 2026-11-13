@@ -1,7 +1,7 @@
 // A stand-in for VectorCraft's control port: just enough of the protocol for the panel, and it records every command it is sent.
 import { writeFileSync } from "node:fs";
 import net from "node:net";
-import { PLUGIN_ID, SET_CROSSING, SET_CROSS_SECTION, SET_JUNCTION } from "../lib/doc.mjs";
+import { PLUGIN_ID, SET_CROSSING, SET_CROSS_SECTION, SET_HUB, SET_JUNCTION } from "../lib/doc.mjs";
 
 export async function fakeVectorCraft({ paths = [], selection = [], spec = { segments: {} }, hasDocument = true } = {}) {
   const doc = { paths: paths.map((p) => ({ kind: "Path", ...p })), selection: [...selection], spec: structuredClone(spec), revision: 1, calls: [], layers: [{ id: 1000, name: "Layer 1", visible: true, locked: false, parent: null }], nextLayer: 1001 };
@@ -71,6 +71,12 @@ export async function fakeVectorCraft({ paths = [], selection = [], spec = { seg
           doc.spec.crossings ??= {};
           const known = Object.entries(doc.spec.crossings).find(([, c]) => roads.every((r) => c.roads.includes(r)))?.[0];
           doc.spec.crossings[known ?? `k${Object.keys(doc.spec.crossings).length + 1}`] = { ...JSON.parse(p.params.description), roads };
+          doc.revision++;
+        } else if (command === SET_HUB) {
+          const roads = [...new Set(doc.paths.filter((q) => doc.selection.includes(q.id)).map((q) => q.name.slice(5)))].sort();
+          doc.spec.hubs ??= {};
+          const known = Object.entries(doc.spec.hubs).find(([, h]) => roads.length === h.roads.length && roads.every((r) => h.roads.includes(r)))?.[0];
+          doc.spec.hubs[known ?? `h${Object.keys(doc.spec.hubs).length + 1}`] = { ...JSON.parse(p.params.description), roads };
           doc.revision++;
         } else if (command === "file.saveCopy") {
           const body = JSON.stringify({ document: { unknown: { pluginData: { [PLUGIN_ID]: doc.spec } } } });

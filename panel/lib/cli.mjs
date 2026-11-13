@@ -35,3 +35,5 @@ export const parseJunction = (jsonText) => runCli(["parse-junction", jsonText]);
 export const diffCrossSection = (current, proposed) => runCli(["diff", current, proposed]);
 /** Checks an intersection description (JSON text) for two crossing roads. {ok, crossing, summary} or {ok: false, error}. */
 export const parseCrossing = (jsonText) => runCli(["parse-crossing", jsonText]);
+/** Checks a hub description (JSON text) for three or more meeting roads. {ok, hub, summary} or {ok: false, error}. */
+export const parseHub = (jsonText) => runCli(["parse-hub", jsonText]);

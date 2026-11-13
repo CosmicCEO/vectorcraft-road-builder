@@ -1,13 +1,16 @@
 // The panel's brain: follows the selection in VectorCraft, shows the selected road's description, turns words into a proposed
 // change with an agent, and on Draw applies it (Describe Road, then Build Road) without losing the user's selection.
 import { EventEmitter } from "node:events";
-import { editCrossSection, parseCrossSection, parseCrossing, parseJunction } from "./cli.mjs";
-import { PLUGIN_ID, SET_CROSSING, SET_CROSS_SECTION, SET_JUNCTION, allPaths, classify, inspectState, junctionId, nodes, readSpec, segmentId } from "./doc.mjs";
+import { editCrossSection, parseCrossSection, parseCrossing, parseHub, parseJunction } from "./cli.mjs";
+import { PLUGIN_ID, SET_CROSSING, SET_CROSS_SECTION, SET_HUB, SET_JUNCTION, allPaths, classify, inspectState, junctionId, nodes, readSpec, segmentId } from "./doc.mjs";
 import { organise, unlockOurs } from "./layers.mjs";
-import { propose as proposeWith, proposeCrossing, proposeJunction } from "./providers.mjs";
+import { propose as proposeWith, proposeCrossing, proposeHub, proposeJunction } from "./providers.mjs";
 
 const DEFAULT_TEXT = "lane back | lane fwd";
-const DEFAULT_CROSSING = { treatment: "signal", crosswalks: true, radius: 6, minor: null, over: null, diameter: 40, stub: "keep" };
+const DEFAULT_CROSSING = { treatment: "signal", crosswalks: true, minor: null, over: null, diameter: 40, stub: "keep" };
+const DEFAULT_HUB = { treatment: "signal", crosswalks: true, minor: null, stub: "keep" };
+const CROSSING_KEYS = ["treatment", "crosswalks", "radius", "minor", "over", "main", "diameter", "stub", "pocket", "pocket_length", "pocket_taper", "slip", "slip_radius", "opening", "accel_length", "accel_taper", "beacon", "gates"];
+const HUB_KEYS = ["treatment", "crosswalks", "radius", "minor", "stub"];
 const NOT_BUILT = "A cloverleaf is not built yet; an overpass is the closest for now.";
 
 export class Panel extends EventEmitter {
@@ -16,7 +19,7 @@ export class Panel extends EventEmitter {
     this.control = control;
     this.providers = providers;
     this.provider = providers.default;
-    this.state = { connected: false, error: null, doc: null, selection: [], target: null, road: null, junction: null, crossing: null, mode: "road", pending: null, busy: null, message: null };
+    this.state = { connected: false, error: null, doc: null, selection: [], target: null, road: null, junction: null, crossing: null, hub: null, mode: "road", pending: null, busy: null, message: null };
     this.last = { revision: null, selection: "" };
     this.spec = null;
     this.queue = Promise.resolve();
@@ -57,7 +60,7 @@ export class Panel extends EventEmitter {
     } catch (e) {
       const noDoc = /no (active )?document/i.test(e.message);
       this.last = { revision: null, selection: "" };
-      return this.#set({ connected: !noDoc && this.control.connected, error: noDoc ? "Open or create a document in VectorCraft." : e.message, doc: null, selection: [], target: null, road: null, junction: null, crossing: null, pending: null });
+      return this.#set({ connected: !noDoc && this.control.connected, error: noDoc ? "Open or create a document in VectorCraft." : e.message, doc: null, selection: [], target: null, road: null, junction: null, crossing: null, hub: null, pending: null });
     }
     const key = s.selection.join(",");
     const changed = force || key !== this.last.selection || s.revision !== this.last.revision;
@@ -77,7 +80,8 @@ export class Panel extends EventEmitter {
         let spines = [];
         if (n.role === "road-shape") spines = [road(n.segment, n.piece)];
         else if (n.role === "junction-shape") spines = [paths.find((p) => junctionId(p.name) === n.segment)];
-        else spines = ((this.spec = await readSpec(this.control)).crossings?.[n.segment]?.roads ?? []).map((r) => road(r));
+        else if (n.role === "crossing-shape") spines = ((this.spec = await readSpec(this.control)).crossings?.[n.segment]?.roads ?? []).map((r) => road(r));
+        else spines = ((this.spec = await readSpec(this.control)).hubs?.[n.segment]?.roads ?? []).map((r) => road(r));
         return spines.filter((p) => p && !seen.has(p.id)).map((p) => (seen.add(p.id), { id: p.id, name: p.name, kind: "Path", role: junctionId(p.name) ? "junction" : "road", segment: segmentId(p.name) ?? junctionId(p.name), viaShape: true }));
       }))).flat();
     }
@@ -85,6 +89,7 @@ export class Panel extends EventEmitter {
     let target = null;
     if (segments.length === 1 && sel.every((n) => n.role === "road")) target = { kind: "road", segment: segments[0], ids: sel.map((n) => n.id) };
     else if (segments.length === 2 && sel.every((n) => n.role === "road")) target = { kind: "crossing", roads: [...segments].sort(), ids: sel.map((n) => n.id) };
+    else if (segments.length >= 3 && sel.every((n) => n.role === "road")) target = { kind: "hub", roads: [...segments].sort(), ids: sel.map((n) => n.id) };
     else if (sel.every((n) => n.role === "junction") && sel.length && new Set(sel.map((n) => n.segment)).size === 1) target = { kind: "junction", segment: sel[0].segment, ids: sel.map((n) => n.id) };
     else if (sel.length === 1 && sel[0].role === "line") target = { kind: "line", ids: [sel[0].id] };
     else if (sel.length) target = { kind: "other", ids: sel.map((n) => n.id) };
@@ -112,9 +117,17 @@ export class Panel extends EventEmitter {
       const parsed = await parseCrossing(JSON.stringify({ ...(stored?.[1] ?? DEFAULT_CROSSING), roads: [a, b] }));
       crossing = { id: stored?.[0] ?? null, roads: [a, b], described: !!stored, spec: parsed.ok ? parsed.crossing : { ...DEFAULT_CROSSING, roads: [a, b] }, summary: parsed.ok ? parsed.summary : "" };
     }
+    let hub = null;
+    if (target?.kind === "hub") {
+      this.spec = await readSpec(this.control);
+      const same = (h) => h.roads?.length === target.roads.length && target.roads.every((r) => h.roads.includes(r));
+      const stored = Object.entries(this.spec.hubs ?? {}).find(([, h]) => same(h));
+      const parsed = await parseHub(JSON.stringify({ ...(stored?.[1] ?? DEFAULT_HUB), roads: target.roads }));
+      hub = { id: stored?.[0] ?? null, roads: target.roads, described: !!stored, spec: parsed.ok ? parsed.hub : { ...DEFAULT_HUB, roads: target.roads }, summary: parsed.ok ? parsed.summary : "" };
+    }
     // A proposal belongs to what was selected when it was made.
     const keep = this.state.pending && !selectionChanged;
-    this.#set({ connected: true, error: null, doc: { title: s.title, revision: s.revision }, selection: sel, target, road, junction, crossing, pending: keep ? this.state.pending : null, message: keep ? this.state.message : null });
+    this.#set({ connected: true, error: null, doc: { title: s.title, revision: s.revision }, selection: sel, target, road, junction, crossing, hub, pending: keep ? this.state.pending : null, message: keep ? this.state.message : null });
   }
 
   /** Words to a proposed cross-section (not applied until Draw). */
@@ -126,6 +139,11 @@ export class Panel extends EventEmitter {
       if (!provider) return this.#set({ message: `Unknown agent "${providerId}".` });
       this.#set({ busy: "thinking", message: null });
       try {
+        if (t.kind === "hub") {
+          const h = this.state.hub;
+          const r = await proposeHub({ description, current: h?.described ? h.spec : null, roads: h.roads, provider });
+          return this.#set(r.ok ? { pending: { kind: "hub", hub: r.hub, summary: r.summary, source: "agent", agent: providerId ?? this.provider, description }, message: null } : { message: r.error });
+        }
         if (t.kind === "crossing") {
           const c = this.state.crossing;
           const r = await proposeCrossing({ description, current: c?.described ? c.spec : null, roads: c.roads, provider });
@@ -206,15 +224,27 @@ export class Panel extends EventEmitter {
     });
   }
 
-  /** Quick choices for the selected crossing: {treatment, crosswalks, radius, minor, over, diameter, stub}. Starts a proposal from the current (or default) description. */
+  /** Quick choices for the selected crossing: {treatment, crosswalks, pocket, slip, …: any field of an intersection description}. Starts a proposal from the current (or default) description. */
   editCrossing(patch) {
     return this.#serial(async () => {
       const base = this.state.pending?.crossing ?? this.state.crossing?.spec;
       if (!base || this.state.target?.kind !== "crossing") return this.#set({ message: "Select the two crossing roads first." });
       const next = { ...base, roads: this.state.crossing.roads };
-      for (const k of ["treatment", "crosswalks", "radius", "minor", "over", "diameter", "stub"]) if (patch[k] !== undefined) next[k] = patch[k];
+      for (const k of CROSSING_KEYS) if (patch[k] !== undefined) next[k] = patch[k];
       const r = await parseCrossing(JSON.stringify(next));
       this.#set(r.ok ? { pending: { kind: "crossing", crossing: r.crossing, summary: r.summary, source: "edit" }, message: r.crossing.treatment === "cloverleaf" ? NOT_BUILT : null } : { message: r.error });
+    });
+  }
+
+  /** Quick choices for three or more selected roads: {treatment, crosswalks, radius, minor, stub}. */
+  editHub(patch) {
+    return this.#serial(async () => {
+      const base = this.state.pending?.hub ?? this.state.hub?.spec;
+      if (!base || this.state.target?.kind !== "hub") return this.#set({ message: "Select the roads that meet first." });
+      const next = { ...base, roads: this.state.hub.roads };
+      for (const k of HUB_KEYS) if (patch[k] !== undefined) next[k] = patch[k];
+      const r = await parseHub(JSON.stringify(next));
+      this.#set(r.ok ? { pending: { kind: "hub", hub: r.hub, summary: r.summary, source: "edit" }, message: null } : { message: r.error });
     });
   }
 
@@ -230,7 +260,11 @@ export class Panel extends EventEmitter {
       if (!t || t.kind === "other") return this.#set({ message: "Select one line (or one road) first." });
       this.#set({ busy: "drawing", message: null });
       try {
-        if (t.kind === "crossing") {
+        if (t.kind === "hub") {
+          const spec = pending?.kind === "hub" ? pending.hub : this.state.hub.spec;
+          await this.control.run("select.set", { ids: t.ids });
+          await this.control.run(SET_HUB, { params: { description: JSON.stringify(spec) } });
+        } else if (t.kind === "crossing") {
           const spec = pending?.kind === "crossing" ? pending.crossing : this.state.crossing.spec;
           if (spec.treatment === "cloverleaf") throw new Error(NOT_BUILT);
           await this.control.run("select.set", { ids: t.ids });
@@ -245,7 +279,7 @@ export class Panel extends EventEmitter {
           await this.control.run(SET_CROSS_SECTION, { params });
         }
         await this.#build(t.ids);
-        this.#set({ pending: null, message: pending || t.kind === "crossing" ? "Drawn." : "Rebuilt." });
+        this.#set({ pending: null, message: pending || t.kind === "crossing" || t.kind === "hub" ? "Drawn." : "Rebuilt." });
       } catch (e) {
         this.#set({ message: `Could not draw: ${e.message}` });
       } finally {

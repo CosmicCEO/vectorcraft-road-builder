@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { Control } from "../lib/control.mjs";
-import { SET_CROSSING, SET_CROSS_SECTION, SET_JUNCTION, PLUGIN_ID } from "../lib/doc.mjs";
+import { SET_CROSSING, SET_CROSS_SECTION, SET_HUB, SET_JUNCTION, PLUGIN_ID } from "../lib/doc.mjs";
 import { Panel } from "../lib/panel.mjs";
 import { fakeVectorCraft } from "./fake-vectorcraft.mjs";
 
@@ -319,4 +319,84 @@ test("an agent can ask for a three-way by trimming the stub", async () => {
   await panel.propose("lighted three-way, trim off the stub", "fake");
   assert.equal(panel.snapshot().pending.crossing.stub, "trim");
   done();
+});
+
+test("the new intersection types and the pocket and slip choices go through the panel", async () => {
+  const vc = await fakeVectorCraft({ paths: [{ id: 2, name: "road.a" }, { id: 3, name: "road.b" }], selection: [2, 3], spec: roads2 });
+  const { panel, done } = await setup(vc);
+  await panel.editCrossing({ treatment: "level crossing", gates: false });
+  let p = panel.snapshot().pending;
+  assert.equal(p.crossing.treatment, "railroad");
+  assert.equal(p.crossing.gates, false);
+  assert.match(p.summary, /railroad crossing$/);
+  await panel.editCrossing({ treatment: "signal", pocket: "left", pocket_length: 60, slip: true });
+  p = panel.snapshot().pending;
+  assert.match(p.summary, /left turn pockets \(60 m\), right-turn slip lanes/);
+  assert.equal(p.crossing.radius, null, "the kerb radius stays automatic until it is set");
+  await panel.editCrossing({ treatment: "driveway" });
+  assert.match(panel.snapshot().pending.summary, /driveway/);
+  await panel.editCrossing({ treatment: "median-opening", opening: 24, main: "a" });
+  assert.match(panel.snapshot().pending.summary, /median opening, 24 m long/);
+  assert.equal(panel.snapshot().pending.crossing.main, "a");
+  await panel.editCrossing({ pocket: "sideways" });
+  assert.match(panel.snapshot().message, /pocket must be/);
+  await panel.draw();
+  assert.equal(vc.doc.spec.crossings.k1.treatment, "median-opening");
+  assert.equal(vc.doc.spec.crossings.k1.opening, 24);
+  done();
+});
+
+test("an agent can ask for turn pockets twice as long", async () => {
+  const spec = { ...roads2, crossings: { k1: { roads: ["a", "b"], treatment: "signal", crosswalks: true, pocket: "left", pocket_length: 30 } } };
+  const vc = await fakeVectorCraft({ paths: [{ id: 2, name: "road.a" }, { id: 3, name: "road.b" }], selection: [2, 3], spec });
+  const { panel, done } = await setup(vc, '{"treatment": "signal", "crosswalks": true, "pocket": "left", "pocket_length": 60}');
+  assert.equal(panel.snapshot().crossing.spec.pocket, "left");
+  await panel.propose("turn pocket probably twice as long", "fake");
+  assert.equal(panel.snapshot().pending.crossing.pocket_length, 60);
+  done();
+});
+
+const roads3 = { segments: { a: TWO_LANE, b: TWO_LANE, c: TWO_LANE } };
+const threeRoads = () => fakeVectorCraft({ paths: [{ id: 2, name: "road.a" }, { id: 3, name: "road.b" }, { id: 4, name: "road.c" }], selection: [2, 3, 4], spec: roads3 });
+
+test("selecting three roads offers a hub; a choice is previewed, then Draw makes it", async () => {
+  const vc = await threeRoads();
+  const { panel, done } = await setup(vc);
+  let s = panel.snapshot();
+  assert.equal(s.target.kind, "hub");
+  assert.deepEqual(s.hub.roads, ["a", "b", "c"]);
+  assert.equal(s.hub.described, false);
+  assert.equal(s.hub.spec.treatment, "signal");
+  await panel.editHub({ treatment: "all way stop", stub: "trim" });
+  s = panel.snapshot();
+  assert.equal(s.pending.kind, "hub");
+  assert.equal(s.pending.hub.treatment, "four-way-stop");
+  assert.match(s.pending.summary, /3 roads meet \(a, b, c\): all-way stop, crosswalks, short stubs trimmed/);
+  assert.equal(steps(vc).length, 0, "nothing is applied until Draw");
+  await panel.draw();
+  assert.deepEqual(steps(vc), ["select.set", SET_HUB, "select.all", "plugin.run", "select.set"]);
+  assert.equal(vc.doc.spec.hubs.h1.treatment, "four-way-stop");
+  assert.deepEqual(vc.doc.selection, [2, 3, 4]);
+  assert.equal(panel.snapshot().hub.described, true);
+  assert.equal(panel.snapshot().hub.id, "h1");
+  done();
+});
+
+test("an agent turns words into a hub, and a click on its drawing selects its roads", async () => {
+  const vc = await threeRoads();
+  const { panel, done } = await setup(vc, '{"treatment": "traffic lights", "crosswalks": true}');
+  await panel.propose("five way, lighted, crosswalks", "fake");
+  const p = panel.snapshot().pending;
+  assert.equal(p.kind, "hub");
+  assert.equal(p.hub.treatment, "signal");
+  assert.deepEqual(p.hub.roads, ["a", "b", "c"], "the program supplies the road ids");
+  done();
+  const spec = { ...roads3, hubs: { h1: { roads: ["a", "b", "c"], treatment: "signal", crosswalks: true } } };
+  const vc2 = await fakeVectorCraft({ paths: [{ id: 2, name: "road.a" }, { id: 3, name: "road.b" }, { id: 4, name: "road.c" }, { id: 40, name: "gen.hub.h1.core" }], selection: [40], spec });
+  const two = await setup(vc2);
+  const s = two.panel.snapshot();
+  assert.equal(s.target.kind, "hub");
+  assert.deepEqual(s.target.ids.sort(), [2, 3, 4]);
+  assert.equal(s.hub.described, true);
+  two.done();
 });

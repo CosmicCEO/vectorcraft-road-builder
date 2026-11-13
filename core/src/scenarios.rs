@@ -1,7 +1,7 @@
 //! The crossing treatments that are not a plain paved box: median opening, ramps (speed-change lane), mid-block crossing, railroad, cloverleaf.
 //! Each draws into the same `gen.crossing.<id>.*` names as the other treatments. Shapes are typical, not surveyed.
 
-use crate::crossing::{Arm, CW, Crossing, CrossingSpec, GRASS, PAVEMENT, Treatment, arc_points, cap_medians, corner_at, cross2, main_index, overpass, simplify_dashes, unit};
+use crate::crossing::{Arm, CW, Crossing, CrossingSpec, GRASS, PAVEMENT, Treatment, cap_medians, corner_at, cross2, main_index, overpass, simplify_dashes, unit};
 use crate::geom::{P, add, dot, scale, sub};
 use crate::junction::{polygon, travel};
 use crate::crosssection::{Dir, Placed};
@@ -194,7 +194,9 @@ fn cloverleaf(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: 
         out.polygon(&format!("{base}.loop.{tag}"), &poly, flip, PAVEMENT);
         out.path(&format!("{base}.loop.{tag}.edges"), &[outer, inner.clone()], flip, WHITE, 0.15, false);
         // The infield.
-        out.polygon(&format!("{base}.loop.{tag}.infield"), &arc_points(c, radius - width / 2.0 - 0.4, 0.0, std::f64::consts::TAU), flip, GRASS);
+        let r_in = radius - width / 2.0 - 0.4;
+        let infield: Vec<P> = (0..48).map(|i| { let t = std::f64::consts::TAU * i as f64 / 48.0; [c[0] + r_in * t.cos(), c[1] + r_in * t.sin()] }).collect();
+        out.polygon(&format!("{base}.loop.{tag}.infield"), &infield, flip, GRASS);
         // A straight strip along each road from where the loop touches its outer edge, outward, tapering at the far end.
         for (k, (arm, edge_sign, along_dir, start)) in [(a, s2, scale(f1, s1), hb + radius), (b, s1, scale(f2, s2), ha + radius)].into_iter().enumerate() {
             let side = if k == 0 { f2 } else { f1 };

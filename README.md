@@ -71,6 +71,14 @@ that **stub**: *keep it as a dead end* (a four-way with a kerbed end) or *trim i
 travel lane, which keeps its far kerb, bike lane and verge). Your drawn line is never cut, only what is built from it. Stored as `crossings.<id>` (`treatment`, `crosswalks`, `radius`, `minor`,
 `over`, `diameter`); menu command **Make Intersection**; `road-builder-cli parse-crossing`.
 
+### More intersections (new in 0.5)
+The same panel card now offers: a **driveway** or side entrance, **left and right turn pockets** (with length and taper), **right-turn slip
+lanes** with an island, a **median opening** or U-turn crossover, an **on-ramp** or **off-ramp** with an acceleration or deceleration lane,
+a **mid-block pedestrian crossing** (beacons optional), a **railroad crossing** (rails, ties, crossbucks, gates; use the new `railway`
+element for the track), and a **cloverleaf** (the overpass and four loop ramps). A side road that only touches the other road, without
+crossing, is accepted: its drawing is carried on to the pavement. Select **three or more roads** that meet at a point and the card offers the
+same lighted, stop-sign or uncontrolled choices for all of them (a "hub"). Details and rules: `docs/SCENARIOS.md`.
+
 ## One layer per road (new in 0.4)
 
 After each Draw the panel sorts the drawing into layers: `road r1` holds `road r1 spine` (the red line you edit, on top) and `road r1 drawing`

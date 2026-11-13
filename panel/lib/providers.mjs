@@ -4,8 +4,8 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { library, parseCrossSection, parseCrossing, parseJunction } from "./cli.mjs";
-import { crossingSystemPrompt, crossingUserPrompt, extractJson, extractLine, junctionSystemPrompt, junctionUserPrompt, systemPrompt, userPrompt } from "./prompt.mjs";
+import { library, parseCrossSection, parseCrossing, parseHub, parseJunction } from "./cli.mjs";
+import { crossingSystemPrompt, crossingUserPrompt, extractJson, hubSystemPrompt, hubUserPrompt, extractLine, junctionSystemPrompt, junctionUserPrompt, systemPrompt, userPrompt } from "./prompt.mjs";
 
 const here = import.meta.dirname;
 
@@ -163,6 +163,38 @@ export async function proposeCrossing({ description, current = null, roads, prov
     attempts.push({ reply: String(reply).slice(0, 600), json, ok: parsed.ok, error: parsed.error });
     if (parsed.ok) return { ...parsed, attempts };
     user = `${crossingUserPrompt(request)}\n\nYour previous answer was: ${json || String(reply).slice(0, 300)}\nIt was rejected: ${parsed.error}\nReply again with a corrected JSON object only.`;
+  }
+  return { ok: false, error: `the agent could not produce a valid intersection: ${attempts.at(-1)?.error}`, attempts };
+}
+
+/**
+ * Turns a description of an intersection of three or more roads into a validated hub. `roads` are the road ids; `current` is the present
+ * description (an object) when editing. Returns {ok: true, hub, summary, attempts} or {ok: false, error, attempts}.
+ */
+export async function proposeHub({ description, current = null, roads, provider, maxAttempts = 2 }) {
+  const system = hubSystemPrompt();
+  const request = { description, current, roads, kind: "hub" };
+  let user = hubUserPrompt(request);
+  const attempts = [];
+  for (let n = 1; n <= maxAttempts; n++) {
+    let reply;
+    try {
+      reply = await ask(provider, { system, user, request });
+    } catch (e) {
+      return { ok: false, error: e.message, attempts };
+    }
+    const json = extractJson(reply);
+    let parsed = { ok: false, error: "the answer had no JSON object in it" };
+    if (json) {
+      try {
+        parsed = await parseHub(JSON.stringify({ ...JSON.parse(json), roads }));
+      } catch {
+        parsed = { ok: false, error: "the answer was not valid JSON" };
+      }
+    }
+    attempts.push({ reply: String(reply).slice(0, 600), json, ok: parsed.ok, error: parsed.error });
+    if (parsed.ok) return { ...parsed, attempts };
+    user = `${hubUserPrompt(request)}\n\nYour previous answer was: ${json || String(reply).slice(0, 300)}\nIt was rejected: ${parsed.error}\nReply again with a corrected JSON object only.`;
   }
   return { ok: false, error: `the agent could not produce a valid intersection: ${attempts.at(-1)?.error}`, attempts };
 }

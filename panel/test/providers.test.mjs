@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { library } from "../lib/cli.mjs";
-import { extractJson, extractLine, junctionSystemPrompt, junctionUserPrompt, systemPrompt, userPrompt } from "../lib/prompt.mjs";
-import { ask, loadProviders, propose, proposeJunction } from "../lib/providers.mjs";
+import { crossingSystemPrompt, extractJson, extractLine, hubSystemPrompt, junctionSystemPrompt, junctionUserPrompt, systemPrompt, userPrompt } from "../lib/prompt.mjs";
+import { ask, loadProviders, propose, proposeHub, proposeJunction } from "../lib/providers.mjs";
 
 const STORY = "facing N: bike-lane | apron | lane S x2 | margin 3 | lane N x2 | apron | bike-lane";
 const fake = (...replies) => {
@@ -137,4 +137,23 @@ test("a junction description is validated, and an invalid one is sent back once"
   const bad = await proposeJunction({ description: "x", provider: fake("I cannot do that") });
   assert.equal(bad.ok, false);
   assert.match(bad.error, /could not produce a valid junction/);
+});
+
+test("the intersection prompts name every treatment and the pocket, stub and ramp fields", () => {
+  const p = crossingSystemPrompt();
+  for (const w of ["signal", "two-way-stop", "four-way-stop", "driveway", "median-opening", "on-ramp", "off-ramp", "midblock-crossing", "railroad", "overpass", "roundabout", "cloverleaf", "pocket_length", "pocket_taper", "slip", "stub", "accel_length", "beacon", "gates", "Twice as long"]) assert.ok(p.includes(w) || p.includes(w.toLowerCase()), w);
+  const h = hubSystemPrompt();
+  for (const w of ["signal", "four-way-stop", "uncontrolled", "stub"]) assert.ok(h.includes(w), w);
+});
+
+test("a hub description is validated, and an invalid one is sent back once", async () => {
+  const p = fake('{"treatment": "roundabout"}', 'Sure: {"treatment": "all way stop", "crosswalks": true}');
+  const r = await proposeHub({ description: "all way stop", roads: ["a", "b", "c"], provider: p });
+  assert.equal(r.ok, true);
+  assert.equal(r.hub.treatment, "four-way-stop");
+  assert.equal(r.attempts.length, 2);
+  assert.match(p.seen[1], /rejected: a hub can be signal/);
+  const bad = await proposeHub({ description: "x", roads: ["a", "b", "c"], provider: fake("I cannot do that") });
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /could not produce a valid intersection/);
 });

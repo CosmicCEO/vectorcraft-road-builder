@@ -8,6 +8,7 @@ export const PLUGIN_ID = "com.cosmicceo.roadbuilder.build";
 export const SET_CROSS_SECTION = `plugin.${PLUGIN_ID}.set_cross_section`;
 export const SET_JUNCTION = `plugin.${PLUGIN_ID}.set_junction`;
 export const SET_CROSSING = `plugin.${PLUGIN_ID}.set_crossing`;
+export const SET_HUB = `plugin.${PLUGIN_ID}.set_hub`;
 
 /** The segment id of a road line (`road.a` is `a`, plain `road` is `main`), or null. Mirrors core/src/roads.rs. */
 export function segmentId(name = "") {
@@ -31,6 +32,8 @@ export function shapeOwner(name = "") {
   if (m) return { role: "junction-shape", segment: m[1] };
   m = /^gen\.crossing\.([^.]+)\./.exec(name);
   if (m) return { role: "crossing-shape", segment: m[1] };
+  m = /^gen\.hub\.([^.]+)\./.exec(name);
+  if (m) return { role: "hub-shape", segment: m[1] };
   return null;
 }
 

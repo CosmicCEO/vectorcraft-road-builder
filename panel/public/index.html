@@ -45,23 +45,52 @@
     <p id="casked" class="muted asked" hidden></p>
     <p id="csummary"></p>
     <div class="row wrap">
-      <label>What happens where they cross
+      <label>What is it
         <select id="ctreat">
-          <option value="signal">Lighted intersection (traffic signals)</option>
-          <option value="two-way-stop">Two-way stop (the side road stops)</option>
-          <option value="four-way-stop">Four-way stop</option>
-          <option value="uncontrolled">No control</option>
-          <option value="overpass">Overpass / underpass</option>
-          <option value="roundabout">Roundabout</option>
-          <option value="cloverleaf">Cloverleaf (not built yet)</option>
+          <optgroup label="At the same level">
+            <option value="signal">Lighted intersection (traffic signals)</option>
+            <option value="two-way-stop">Two-way stop (the side road stops)</option>
+            <option value="four-way-stop">Four-way stop</option>
+            <option value="uncontrolled">No control</option>
+            <option value="driveway">Driveway or side entrance</option>
+            <option value="roundabout">Roundabout</option>
+          </optgroup>
+          <optgroup label="On a road">
+            <option value="median-opening">Median opening / U-turn crossover</option>
+            <option value="midblock-crossing">Mid-block pedestrian crossing</option>
+            <option value="railroad">Railroad crossing</option>
+          </optgroup>
+          <optgroup label="Ramps and bridges">
+            <option value="on-ramp">On-ramp (merge, acceleration lane)</option>
+            <option value="off-ramp">Off-ramp (exit, deceleration lane)</option>
+            <option value="overpass">Overpass / underpass</option>
+            <option value="cloverleaf">Cloverleaf (overpass and loop ramps)</option>
+          </optgroup>
         </select>
       </label>
     </div>
     <div class="row wrap">
       <label id="cminorRow" hidden>Road that stops <select id="cminor"></select></label>
       <label id="coverRow" hidden>Road on top <select id="cover"></select></label>
+      <label id="cmainRow" hidden>Road that stays <select id="cmain"></select></label>
       <label id="cdiaRow" hidden>Width <input id="cdia" type="number" min="20" max="120" step="2" value="40"> m</label>
+      <label id="copenRow" hidden>Opening <input id="copen" type="number" min="8" max="40" step="1" value="18"> m</label>
+      <label id="caccelRow" hidden>Speed-change lane <input id="caccel" type="number" min="30" max="400" step="10" value="120"> m</label>
       <label id="ccrossRow"><input type="checkbox" id="ccross"> Crosswalks</label>
+      <label id="cbeaconRow" hidden><input type="checkbox" id="cbeacon"> Flashing beacons</label>
+      <label id="cgatesRow" hidden><input type="checkbox" id="cgates"> Gates</label>
+      <label id="cslipRow"><input type="checkbox" id="cslip"> Right-turn slip lanes</label>
+    </div>
+    <div class="row wrap" id="cpocketRow">
+      <label>Turn pockets
+        <select id="cpocket">
+          <option value="none">None</option>
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+          <option value="both">Left and right</option>
+        </select>
+      </label>
+      <label id="cpocketLenRow">Length <input id="cpocketlen" type="number" min="5" max="150" step="5" value="30"> m</label>
     </div>
     <div class="row wrap" id="cstubRow">
       <label>A short stub past the crossing
@@ -72,6 +101,30 @@
       </label>
     </div>
     <div class="row"><button id="ccancel" class="plain" hidden>Cancel</button></div>
+  </section>
+
+  <section id="hubCard" class="card" hidden>
+    <h2 id="htitle">Roads meeting at a point</h2>
+    <p id="hasked" class="muted asked" hidden></p>
+    <p id="hsummary"></p>
+    <div class="row wrap">
+      <label>What is it
+        <select id="htreat">
+          <option value="signal">Lighted intersection (traffic signals)</option>
+          <option value="two-way-stop">Two-way stop (the narrowest road stops)</option>
+          <option value="four-way-stop">All-way stop</option>
+          <option value="uncontrolled">No control</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="hcross"> Crosswalks</label>
+      <label>A short stub
+        <select id="hstub">
+          <option value="keep">Keep as a dead end</option>
+          <option value="trim">Trim it off</option>
+        </select>
+      </label>
+    </div>
+    <div class="row"><button id="hcancel" class="plain" hidden>Cancel</button></div>
   </section>
 
   <section id="road" class="card" hidden>

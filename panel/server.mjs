@@ -50,6 +50,7 @@ export function createServer({ panel, port }) {
     match: () => panel.match(),
     junction: (b) => panel.editJunction(b.patch ?? {}),
     crossing: (b) => panel.editCrossing(b.patch ?? {}),
+    hub: (b) => panel.editHub(b.patch ?? {}),
     agent: (b) => panel.setAgent(String(b.id)),
   };
 

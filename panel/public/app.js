@@ -72,6 +72,7 @@ function show(s) {
   else if (t.kind === "line") ctx.append(el("strong", {}, "A plain line is selected"), el("p", { className: "muted" }, s.mode === "connection" ? "Describe the junction below, or just carry the road across." : "Describe it below to turn it into a road."));
   else if (t.kind === "road") ctx.append(el("strong", {}, `Road ${s.road.segment}`), el("p", { className: "muted" }, s.road.described ? `${s.road.pieces.selected} of ${s.road.pieces.total} piece${s.road.pieces.total === 1 ? "" : "s"} selected` : "No description yet (drawn as two lanes)"));
   else if (t.kind === "junction") ctx.append(el("strong", {}, `Junction ${s.junction.id}`), el("p", { className: "muted" }, s.junction.described ? "A connecting line with a description" : "A connecting line, not described yet"));
+  else if (t.kind === "hub") ctx.append(el("strong", {}, `${t.roads.length} roads meet: ${t.roads.join(", ")}`), el("p", { className: "muted" }, s.hub?.described ? "They form an intersection. Change it below, then Draw." : "Choose what happens where they meet, then Draw."));
   else if (t.kind === "crossing") ctx.append(el("strong", {}, `Roads ${t.roads[0]} and ${t.roads[1]} cross`), el("p", { className: "muted" }, s.crossing?.described ? "They form an intersection. Change it below, then Draw." : "Choose what happens where they cross, then Draw."));
   else ctx.append(el("strong", {}, "Select one line or one road"), el("p", { className: "muted" }, "The selection holds something this panel does not describe."));
   if (t && (t.kind === "road" || t.kind === "junction") && !s.busy) {
@@ -91,27 +92,59 @@ function show(s) {
   $("crossingCard").hidden = !cv;
   if (cv) {
     const [ra, rb] = s.crossing.roads;
+    const sp = cv.spec;
+    const tr = sp.treatment;
     $("ctitle").textContent = cv.proposed ? "Proposed intersection" : s.crossing.described ? "Intersection" : "Make an intersection";
     $("casked").textContent = pc?.description ? `You asked: “${pc.description}”` : "";
     $("casked").hidden = !pc?.description;
     $("csummary").textContent = cv.summary;
-    $("ctreat").value = cv.spec.treatment;
-    $("ccross").checked = !!cv.spec.crosswalks;
-    $("ccrossRow").hidden = cv.spec.treatment === "overpass" || cv.spec.treatment === "cloverleaf";
+    $("ctreat").value = tr;
+    const atGrade = ["signal", "two-way-stop", "four-way-stop", "uncontrolled", "driveway", "on-ramp", "off-ramp"].includes(tr);
     const pick = (id, blank) => {
       const sel = $(id);
       if (sel.options.length !== 3 || sel.options[1].value !== ra || sel.options[2].value !== rb) sel.replaceChildren(el("option", { value: "", textContent: blank }), el("option", { value: ra, textContent: `Road ${ra}` }), el("option", { value: rb, textContent: `Road ${rb}` }));
       return sel;
     };
-    pick("cminor", "the narrower road").value = cv.spec.minor ?? "";
-    pick("cover", `Road ${ra}`).value = cv.spec.over ?? "";
-    $("cminorRow").hidden = cv.spec.treatment !== "two-way-stop";
-    $("coverRow").hidden = cv.spec.treatment !== "overpass";
-    $("cdiaRow").hidden = cv.spec.treatment !== "roundabout";
-    $("cstubRow").hidden = !["signal", "two-way-stop", "four-way-stop", "uncontrolled"].includes(cv.spec.treatment);
-    $("cstub").value = cv.spec.stub ?? "keep";
-    if (document.activeElement !== $("cdia")) $("cdia").value = cv.spec.diameter ?? 40;
+    pick("cminor", "the narrower road").value = sp.minor ?? "";
+    pick("cover", `Road ${ra}`).value = sp.over ?? "";
+    pick("cmain", "worked out for me").value = sp.main ?? "";
+    const only = (id, on) => ($(id).hidden = !on);
+    only("cminorRow", tr === "two-way-stop");
+    only("coverRow", tr === "overpass" || tr === "cloverleaf");
+    only("cmainRow", ["median-opening", "midblock-crossing", "railroad", "on-ramp", "off-ramp"].includes(tr));
+    only("cdiaRow", tr === "roundabout");
+    only("copenRow", tr === "median-opening");
+    only("caccelRow", tr === "on-ramp" || tr === "off-ramp");
+    only("ccrossRow", atGrade && !["driveway", "on-ramp", "off-ramp"].includes(tr) || tr === "roundabout");
+    only("cbeaconRow", tr === "midblock-crossing");
+    only("cgatesRow", tr === "railroad");
+    only("cslipRow", atGrade && !["driveway", "on-ramp", "off-ramp"].includes(tr));
+    only("cpocketRow", atGrade && !["driveway", "on-ramp", "off-ramp"].includes(tr));
+    only("cstubRow", atGrade);
+    $("ccross").checked = !!sp.crosswalks;
+    $("cbeacon").checked = !!sp.beacon;
+    $("cgates").checked = sp.gates !== false;
+    $("cslip").checked = !!sp.slip;
+    $("cpocket").value = sp.pocket ?? "none";
+    $("cpocketLenRow").hidden = (sp.pocket ?? "none") === "none";
+    $("cstub").value = sp.stub ?? "keep";
+    for (const [id, v, d] of [["cdia", sp.diameter, 40], ["copen", sp.opening, 18], ["caccel", sp.accel_length, 120], ["cpocketlen", sp.pocket_length, 30]]) if (document.activeElement !== $(id)) $(id).value = v ?? d;
     $("ccancel").hidden = !cv.proposed;
+  }
+
+  // Hub card: three or more roads that meet at one point.
+  const ph = s.pending?.kind === "hub" ? s.pending : null;
+  const hv = t?.kind === "hub" && s.hub ? { spec: ph ? ph.hub : s.hub.spec, summary: ph ? ph.summary : s.hub.summary, proposed: !!ph } : null;
+  $("hubCard").hidden = !hv;
+  if (hv) {
+    $("htitle").textContent = hv.proposed ? "Proposed intersection" : s.hub.described ? "Roads meeting at a point" : "Make an intersection of these roads";
+    $("hasked").textContent = ph?.description ? `You asked: “${ph.description}”` : "";
+    $("hasked").hidden = !ph?.description;
+    $("hsummary").textContent = hv.summary;
+    $("htreat").value = hv.spec.treatment;
+    $("hcross").checked = !!hv.spec.crosswalks;
+    $("hstub").value = hv.spec.stub ?? "keep";
+    $("hcancel").hidden = !hv.proposed;
   }
 
   // Junction card: the proposed junction, or the selected junction's description.
@@ -134,10 +167,10 @@ function show(s) {
     $("jcancel").hidden = !jv.proposed;
   }
 
-  $("road").hidden = !s.road || !!pj || !!cv;
+  $("road").hidden = !s.road || !!pj || !!cv || !!hv;
   if (s.road && !pj) drawItems($("items"), $("bar"), $("total"), s.road, !s.pending);
 
-  const pr = s.pending && !pj && !pc ? s.pending : null; // a proposed road
+  const pr = s.pending && !pj && !pc && !ph ? s.pending : null; // a proposed road
   $("proposal").hidden = !pr;
   $("asked").textContent = pr?.description ? `You asked: “${pr.description}”` : "";
   $("asked").hidden = !pr?.description;
@@ -151,13 +184,13 @@ function show(s) {
   scope.hidden = !multi;
   if (multi) $("scope-all").textContent = `All ${s.road.pieces.total} pieces of this road`;
 
-  const wordsFor = t?.kind === "crossing" ? "Describe the intersection, or the change you want (lighted, two-way stop, overpass, roundabout …)" : null;
+  const wordsFor = t?.kind === "crossing" ? "Describe the intersection, or the change you want (lighted, stop signs, left turn pockets, driveway, ramp, railroad, roundabout …)" : t?.kind === "hub" ? "Describe the intersection, or the change you want (lighted, all-way stop, crosswalks …)" : null;
   const junctionish = t?.kind === "junction" || (t?.kind === "line" && s.mode === "connection");
   $("wordsLabel").textContent = wordsFor ?? (junctionish ? "Describe the junction, or the change you want" : "Describe the road, or the change you want");
   const canAct = !!t && t.kind !== "other" && !s.busy;
   $("propose").disabled = !canAct || !$("words").value.trim();
   $("draw").disabled = !canAct;
-  $("draw").textContent = s.busy === "drawing" ? "Drawing…" : s.pending ? "Draw this" : t?.kind === "crossing" && !s.crossing?.described ? "Draw this intersection" : "Redraw";
+  $("draw").textContent = s.busy === "drawing" ? "Drawing…" : s.pending ? "Draw this" : (t?.kind === "crossing" && !s.crossing?.described) || (t?.kind === "hub" && !s.hub?.described) ? "Draw this intersection" : "Redraw";
   $("thinking").hidden = s.busy !== "thinking";
   const msg = $("message");
   msg.textContent = s.message ?? "";
@@ -177,6 +210,19 @@ $("ccross").onchange = () => cpatch({ crosswalks: $("ccross").checked });
 $("cminor").onchange = () => cpatch({ minor: $("cminor").value || null });
 $("cover").onchange = () => cpatch({ over: $("cover").value || null });
 $("cstub").onchange = () => cpatch({ stub: $("cstub").value });
+$("cmain").onchange = () => cpatch({ main: $("cmain").value || null });
+$("cbeacon").onchange = () => cpatch({ beacon: $("cbeacon").checked });
+$("cgates").onchange = () => cpatch({ gates: $("cgates").checked });
+$("cslip").onchange = () => cpatch({ slip: $("cslip").checked });
+$("cpocket").onchange = () => cpatch({ pocket: $("cpocket").value });
+$("cpocketlen").onchange = () => cpatch({ pocket_length: Number($("cpocketlen").value) || 30 });
+$("copen").onchange = () => cpatch({ opening: Number($("copen").value) || 18 });
+$("caccel").onchange = () => cpatch({ accel_length: Number($("caccel").value) || 120 });
+const hpatch = (patch) => act("hub", { patch });
+$("htreat").onchange = () => hpatch({ treatment: $("htreat").value });
+$("hcross").onchange = () => hpatch({ crosswalks: $("hcross").checked });
+$("hstub").onchange = () => hpatch({ stub: $("hstub").value });
+$("hcancel").onclick = () => act("cancel");
 $("cdia").onchange = () => cpatch({ diameter: Number($("cdia").value) || 40 });
 $("match").onclick = () => act("match");
 for (const r of document.querySelectorAll("input[name=mode]")) r.onchange = () => act("mode", { mode: r.value });
