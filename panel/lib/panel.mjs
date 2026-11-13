@@ -1,18 +1,19 @@
 // The panel's brain: follows the selection in VectorCraft, shows the selected road's description, turns words into a proposed
 // change with an agent, and on Draw applies it (Describe Road, then Build Road) without losing the user's selection.
 import { EventEmitter } from "node:events";
-import { diffCrossSection, editCrossSection, parseCrossSection, parseCrossing, parseHub, parseJunction } from "./cli.mjs";
+import { diffCrossSection, editCrossSection, parseCrossSection, parseCrossing, parseHub, parseJunction, parseTransition } from "./cli.mjs";
 import { describeChanges } from "./changes.mjs";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { PLUGIN_ID, SET_CROSSING, SET_CROSS_SECTION, SET_HUB, SET_JUNCTION, allPaths, classify, inspectState, junctionId, nodes, readSpec, segmentId } from "./doc.mjs";
+import { PLUGIN_ID, SET_CROSSING, SET_CROSS_SECTION, SET_HUB, SET_TRANSITION, SET_JUNCTION, allPaths, classify, inspectState, junctionId, nodes, readSpec, segmentId } from "./doc.mjs";
 import { organise, unlockOurs } from "./layers.mjs";
-import { propose as proposeWith, proposeCrossing, proposeHub, proposeJunction } from "./providers.mjs";
+import { propose as proposeWith, proposeCrossing, proposeHub, proposeJunction, proposeTransition } from "./providers.mjs";
 
 const DEFAULT_TEXT = "lane back | lane fwd";
 const DEFAULT_CROSSING = { treatment: "signal", crosswalks: true, minor: null, over: null, diameter: 40, stub: "keep" };
 const DEFAULT_HUB = { treatment: "signal", crosswalks: true, minor: null, stub: "keep" };
-const CROSSING_KEYS = ["treatment", "crosswalks", "radius", "minor", "over", "main", "diameter", "stub", "pocket", "pocket_length", "pocket_taper", "slip", "slip_radius", "opening", "accel_length", "accel_taper", "beacon", "gates"];
+const CROSSING_KEYS = ["treatment", "crosswalks", "radius", "minor", "over", "main", "diameter", "stub", "pocket", "pocket_length", "pocket_taper", "slip", "slip_radius", "opening", "gore", "gore_length", "accel_length", "accel_taper", "beacon", "gates"];
+const DEFAULT_TRANSITION = { change: "add", side: "right", direction: "fwd", count: 1 };
 const HUB_KEYS = ["treatment", "crosswalks", "radius", "minor", "stub"];
 
 export class Panel extends EventEmitter {
@@ -103,6 +104,15 @@ export class Panel extends EventEmitter {
       const parsed = await parseCrossSection(text ?? DEFAULT_TEXT);
       const total = (await allPaths(this.control)).filter((p) => p.name === `road.${target.segment}` || (target.segment === "main" && p.name === "road")).length;
       road = { segment: target.segment, described: text !== null, text: text ?? DEFAULT_TEXT, items: parsed.items ?? [], total_width: parsed.total_width, anchor: this.spec.segments?.[target.segment]?.anchor ?? "auto", pieces: { selected: target.ids.length, total } };
+      // Which line of the road is selected (for a lane change: transitions belong to one line), and the lane changes stored for it.
+      const lines = (await allPaths(this.control)).filter((p) => segmentId(p.name) === target.segment);
+      road.piece = target.ids.length === 1 ? lines.findIndex((p) => p.id === target.ids[0]) + 1 || null : null;
+      road.transitions = [];
+      for (const e of this.spec.transitions?.[target.segment] ?? []) {
+        if (road.piece && (e.piece ?? 1) !== road.piece) continue;
+        const r = await parseTransition(JSON.stringify(e), road.text);
+        road.transitions.push({ spec: e, summary: r.ok ? r.summary : "", after: r.ok ? r.after : "" });
+      }
     }
     let junction = null;
     if (target?.kind === "junction") {
@@ -183,6 +193,12 @@ export class Panel extends EventEmitter {
       const r = await proposeJunction({ description, current, provider });
       return r.ok ? { pending: { kind: "junction", junction: r.junction, summary: r.summary, changes: describeChanges(current, r.junction, "junction"), ...base } } : { message: r.error };
     }
+    if (t.kind === "road" && this.state.mode === "transition") {
+      const road = this.state.road;
+      const draft = this.state.pending?.kind === "transition" ? this.state.pending.transition : null;
+      const r = await proposeTransition({ description, current: draft, crossSection: road.text, provider });
+      return r.ok ? { pending: { kind: "transition", transition: { ...r.transition, piece: road.piece ?? 1 }, summary: r.summary, after: r.after, changes: [r.summary, `after it the road is: ${r.after}`], ...base } } : { message: r.error };
+    }
     const current = this.state.road?.described ? this.state.road.text : null;
     const r = await proposeWith({ description, current, provider });
     if (!r.ok) return { message: r.error };
@@ -233,7 +249,7 @@ export class Panel extends EventEmitter {
 
   /** What a plain line is: a road, or a connection between two roads. */
   setMode(mode) {
-    if (mode !== "road" && mode !== "connection") return false;
+    if (mode !== "road" && mode !== "connection" && mode !== "transition") return false;
     this.#set({ mode, pending: null, message: null });
     return true;
   }
@@ -272,6 +288,41 @@ export class Panel extends EventEmitter {
     });
   }
 
+  /** Quick choices for a lane change on the selected line: {change, side, direction, count, at, length, speed}. Starts from the draft (or a default). */
+  editTransition(patch) {
+    return this.#serial(async () => {
+      const road = this.state.road;
+      if (this.state.target?.kind !== "road" || !road?.piece) return this.#set({ message: "Select one line of one road first." });
+      const base = this.state.pending?.kind === "transition" ? this.state.pending.transition : DEFAULT_TRANSITION;
+      const next = { ...base, ...patch, piece: road.piece };
+      for (const k of ["at", "length"]) if (next[k] === "" || Number.isNaN(next[k])) next[k] = null;
+      const r = await parseTransition(JSON.stringify(next), road.text);
+      this.#set(r.ok ? { pending: { kind: "transition", transition: r.transition, summary: r.summary, after: r.after, changes: [r.summary, `after it the road is: ${r.after}`], source: "edit" }, message: null } : { message: r.error });
+    });
+  }
+
+  /** Takes away the `index`th lane change stored for the selected line. */
+  removeTransition(index) {
+    return this.#serial(async () => {
+      const t = this.state.target;
+      const e = this.state.road?.transitions?.[index];
+      if (t?.kind !== "road" || !e) return this.#set({ message: "That lane change is not there any more." });
+      this.#set({ busy: "drawing", message: null });
+      try {
+        await this.control.run("select.set", { ids: t.ids });
+        await this.control.run(SET_TRANSITION, { params: { description: JSON.stringify({ ...e.spec, remove: true }) } });
+        await this.#build(t.ids);
+        this.spec = await readSpec(this.control);
+        this.#set({ pending: null, notes: this.spec.notes ?? [], message: "Lane change removed." });
+      } catch (err) {
+        this.#set({ message: `Could not remove it: ${err.message}` });
+      } finally {
+        this.#set({ busy: null });
+        await this.#refresh(true);
+      }
+    });
+  }
+
   /** Quick choices for three or more selected roads: {treatment, crosswalks, radius, minor, stub}. */
   editHub(patch) {
     return this.#serial(async () => {
@@ -305,6 +356,9 @@ export class Panel extends EventEmitter {
           const spec = pending?.kind === "crossing" ? pending.crossing : this.state.crossing.spec;
           await this.control.run("select.set", { ids: t.ids });
           await this.control.run(SET_CROSSING, { params: { description: JSON.stringify(spec) } });
+        } else if (pending?.kind === "transition") {
+          await this.control.run("select.set", { ids: t.ids });
+          await this.control.run(SET_TRANSITION, { params: { description: JSON.stringify(pending.transition) } });
         } else if (pending?.kind === "junction") {
           await this.control.run("select.set", { ids: t.ids });
           await this.control.run(SET_JUNCTION, { params: { description: JSON.stringify(pending.junction) } });

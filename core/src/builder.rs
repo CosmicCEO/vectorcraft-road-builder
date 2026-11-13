@@ -5,6 +5,7 @@ use crate::geom::{P, Poly, add, scale};
 use crate::output::Out;
 use crate::crossing::{self, CrossingSpec};
 use crate::hub::{self, HubSpec};
+use crate::transition;
 use crate::junction::{self, JunctionSpec, junction_id};
 use crate::roads::{self, Spec, anchor_from, segment_id};
 use crate::scene::{Scene, is_junction_name};
@@ -407,6 +408,40 @@ pub fn set_hub_text(input: &Value, params: &Value) -> Result<String, String> {
     let hs = HubSpec::from_json(&value)?;
     let id = spec.hub_with(&roads).unwrap_or_else(|| (1..).map(|n| format!("h{n}")).find(|id| !spec.hubs().iter().any(|(k, _)| k == id)).unwrap_or_default());
     spec.set_hub(&id, &hs);
+    let mut out = Out::new();
+    for it in &items {
+        if let Some(iid) = it.id {
+            out.keep(iid);
+        }
+    }
+    Ok(out.finish_with(Some(&spec.to_value())))
+}
+
+/// Command "Set Transition": the selected line of a road gains or loses lanes; stores the transition (see `transition`) in the document's plug-in
+/// data. `description` is JSON (change, side, direction, count, at, length, speed, to, piece, remove).
+pub fn set_transition_text(input: &Value, params: &Value) -> Result<String, String> {
+    let items = items_from_filter_input(input);
+    let mut spec = Spec::from_document_data(&params["_context"]["documentData"]);
+    let mut roads: Vec<String> = Vec::new();
+    for it in &items {
+        if let Some(id) = segment_id(&it.name).filter(|id| !roads.contains(id)) {
+            roads.push(id);
+        }
+    }
+    let [road] = <[String; 1]>::try_from(roads).map_err(|r: Vec<String>| format!("Select one line of one road; {} road{} selected.", r.len(), if r.len() == 1 { " is" } else { "s are" }))?;
+    let value: Value = match params["description"].as_str().map(str::trim).filter(|t| !t.is_empty()) {
+        Some(raw) => serde_json::from_str(raw).map_err(|e| format!("the transition description is not valid JSON: {e}"))?,
+        None => return Err("Describe the transition: change (add or drop), side (left or right) and optionally count, at, length.".into()),
+    };
+    let t = transition::TransitionSpec::from_json(&value)?;
+    // Check it can be worked out before storing it.
+    let (parsed, _, _) = spec.for_segment(&road);
+    if value["remove"].as_bool() != Some(true) {
+        let head = items.iter().find_map(|i| i.subs.first()).map_or([0.0, 1.0], |s| roads::heading(&s.iter().map(|&p| roads::flip(p)).collect::<Vec<_>>()));
+        let here = transition::cross_section_at(&parsed, &spec.library, head, &spec.transitions_for(&road), t.piece, t.at.unwrap_or(f64::MAX));
+        transition::derive_to(&here, &spec.library, head, &t)?;
+    }
+    spec.set_transition(&road, &t, value["remove"].as_bool() == Some(true));
     let mut out = Out::new();
     for it in &items {
         if let Some(iid) = it.id {

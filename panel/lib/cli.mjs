@@ -37,3 +37,5 @@ export const diffCrossSection = (current, proposed) => runCli(["diff", current, 
 export const parseCrossing = (jsonText) => runCli(["parse-crossing", jsonText]);
 /** Checks a hub description (JSON text) for three or more meeting roads. {ok, hub, summary} or {ok: false, error}. */
 export const parseHub = (jsonText) => runCli(["parse-hub", jsonText]);
+/** Checks a lane transition (JSON text) and, given the road's current cross-section, says what it becomes. {ok, transition, summary, after?} or {ok: false, error}. */
+export const parseTransition = (jsonText, crossSection) => runCli(["parse-transition", jsonText, ...(crossSection ? [crossSection] : [])]);

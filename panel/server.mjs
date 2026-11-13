@@ -51,6 +51,8 @@ export function createServer({ panel, port }) {
     junction: (b) => panel.editJunction(b.patch ?? {}),
     crossing: (b) => panel.editCrossing(b.patch ?? {}),
     hub: (b) => panel.editHub(b.patch ?? {}),
+    transition: (b) => panel.editTransition(b.patch ?? {}),
+    removetransition: (b) => panel.removeTransition(Number(b.index)),
     agent: (b) => panel.setAgent(String(b.id)),
   };
 

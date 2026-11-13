@@ -140,6 +140,31 @@ impl Spec {
         }).map(|(id, _)| id)
     }
 
+    /// The lane transitions stored for a road, in the order stored (see `transition`).
+    pub fn transitions_for(&self, road: &str) -> Vec<crate::transition::TransitionSpec> {
+        self.raw["transitions"][road].as_array().map(|a| a.iter().filter_map(|v| crate::transition::TransitionSpec::from_json(v).ok()).collect()).unwrap_or_default()
+    }
+
+    /// Adds a transition to a road; one already stored for the same line within 5 m of the same place is replaced. `remove` drops it instead.
+    pub fn set_transition(&mut self, road: &str, spec: &crate::transition::TransitionSpec, remove: bool) {
+        if !self.raw["transitions"].is_object() {
+            self.raw["transitions"] = json!({});
+        }
+        let mut list: Vec<Value> = self.raw["transitions"][road].as_array().cloned().unwrap_or_default();
+        let near = |v: &Value| v["piece"].as_u64().unwrap_or(1) as usize == spec.piece && (v["at"].as_f64().unwrap_or(-1e9) - spec.at.unwrap_or(-1e9)).abs() <= 5.0;
+        list.retain(|v| !near(v));
+        if !remove {
+            list.push(spec.to_json());
+        }
+        if list.is_empty() {
+            if let Some(m) = self.raw["transitions"].as_object_mut() {
+                m.remove(road);
+            }
+        } else {
+            self.raw["transitions"][road] = Value::Array(list);
+        }
+    }
+
     /// Stores a hub description (already checked).
     pub fn set_hub(&mut self, id: &str, spec: &crate::hub::HubSpec) {
         if !self.raw["hubs"].is_object() {
@@ -166,12 +191,12 @@ impl Spec {
     }
 }
 
-struct Style {
-    rgb: [f64; 3],
-    width: f64,
-    dash: Option<(f64, f64)>,
+pub(crate) struct Style {
+    pub(crate) rgb: [f64; 3],
+    pub(crate) width: f64,
+    pub(crate) dash: Option<(f64, f64)>,
     /// Two parallel lines this far apart (a double line).
-    double: Option<f64>,
+    pub(crate) double: Option<f64>,
 }
 
 pub(crate) const WHITE: [f64; 3] = [0.98, 0.98, 0.98];
@@ -183,7 +208,7 @@ fn solid(rgb: [f64; 3], width: f64) -> Option<Style> {
 }
 
 /// How the line between two neighbouring elements is painted, if at all.
-fn boundary(a: &Placed, b: &Placed) -> Option<Style> {
+pub(crate) fn boundary(a: &Placed, b: &Placed) -> Option<Style> {
     use Role::*;
     let travelish = |r: Role| matches!(r, Travel | Pocket);
     let hard = |r: Role| matches!(r, Curbed | Walk);
@@ -247,17 +272,22 @@ pub(crate) fn emit(out: &mut Out, base: &str, path: &[P], placed: &[Placed]) {
             _ => solid(CURB, 0.15), // the outer edge of the whole road
         };
         let Some(style) = style else { continue };
-        let lines: Vec<Vec<P>> = match style.double {
-            Some(gap) => [gap / 2.0, -gap / 2.0].iter().map(|&o| simplify(&offset_polyline(edge, o, MITRE_LIMIT), 0.02)).collect(),
-            None => vec![edge.clone()],
-        };
-        let lines: Vec<Vec<P>> = match style.dash {
-            Some((on, off)) => lines.iter().flat_map(|l| dash_polyline(l, on, off)).collect(),
-            None => lines,
-        };
-        if lines.iter().any(|l| l.len() >= 2) {
-            out.path(&format!("{base}.line.{k}"), &lines, flip, style.rgb, style.width, false);
-        }
+        boundary_line(out, &format!("{base}.line.{k}"), edge, &style);
+    }
+}
+
+/// Paints the line along `edge` in `style` (single or double, solid or dashed).
+pub(crate) fn boundary_line(out: &mut Out, name: &str, edge: &[P], style: &Style) {
+    let lines: Vec<Vec<P>> = match style.double {
+        Some(gap) => [gap / 2.0, -gap / 2.0].iter().map(|&o| simplify(&offset_polyline(edge, o, MITRE_LIMIT), 0.02)).collect(),
+        None => vec![edge.to_vec()],
+    };
+    let lines: Vec<Vec<P>> = match style.dash {
+        Some((on, off)) => lines.iter().flat_map(|l| dash_polyline(l, on, off)).collect(),
+        None => lines,
+    };
+    if lines.iter().any(|l| l.len() >= 2) {
+        out.path(name, &lines, flip, style.rgb, style.width, false);
     }
 }
 
@@ -287,7 +317,7 @@ pub fn build_clipped(items: &[Item], spec: &Spec, trims: &[crate::crossing::Trim
                 (p, a)
             })
             .clone();
-        let placed = match layout(&parsed, &spec.library, heading(&path), anchor) {
+        let placed = match layout(&parsed, &spec.library, heading(&path), anchor.clone()) {
             Ok(p) => p,
             Err(e) => {
                 notes.push(format!("road {id}: {e}"));
@@ -301,7 +331,14 @@ pub fn build_clipped(items: &[Item], spec: &Spec, trims: &[crate::crossing::Trim
         let mine: Vec<&crate::crossing::Trim> = trims.iter().filter(|t| t.index == index).collect();
         for (n, drawn) in crate::crossing::apply_trims(&path, &mine).iter().enumerate() {
             // A road cut in two by a gap keeps its piece number; the second part is named `.part2` so a click on it still finds its road.
-            emit(out, &if n == 0 { base.clone() } else { format!("{base}.part{}", n + 1) }, drawn, &placed);
+            let name = if n == 0 { base.clone() } else { format!("{base}.part{}", n + 1) };
+            let here: Vec<crate::transition::TransitionSpec> = if n == 0 { spec.transitions_for(&id).into_iter().filter(|t| t.piece == *piece).collect() } else { Vec::new() };
+            if here.is_empty() {
+                emit(out, &name, drawn, &placed);
+            } else {
+                let parts = crate::transition::parts(drawn, &parsed, &anchor, &spec.library, &here, &mut notes);
+                crate::transition::emit_parts(out, &name, &parts);
+            }
         }
         let _ = Dir::Fwd; // directions are resolved in the layout; arrows come with the junction work
     }

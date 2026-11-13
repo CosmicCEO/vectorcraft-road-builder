@@ -28,6 +28,9 @@ pub const YIELD_TRIANGLE_HEIGHT: f64 = 0.675;
 pub const YIELD_TRIANGLE_SPACE: f64 = 0.15;
 /// The thinnest marking line the plug-in draws: a normal line is 4 to 6 in (`line.normal-width`).
 pub const MARKING_LINE_MIN: f64 = 0.11;
+/// Gore chevrons: white, at least 12 in wide at 45 mph or more (8 in below), at about 30 to 45 degrees to the lines (`gore.chevron`, MUTCD 3B.25).
+pub const GORE_CHEVRON_WIDTH: f64 = 0.31;
+pub const GORE_CHEVRON_ANGLE_DEG: f64 = 40.0;
 /// Railroad: stop line at least 15 ft from the nearest rail (`rail.stop-line`).
 pub const RAIL_STOP_LINE_MIN: f64 = 4.58;
 /// Signal faces: primary faces at least 40 ft beyond the stop line (`signal.position`).

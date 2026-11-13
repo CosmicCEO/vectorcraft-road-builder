@@ -126,6 +126,8 @@ function show(s) {
     only("caccelRow", tr === "on-ramp" || tr === "off-ramp");
     only("ccrossRow", atGrade && !["driveway", "on-ramp", "off-ramp"].includes(tr) || tr === "roundabout");
     only("cbeaconRow", tr === "midblock-crossing");
+    only("cgoreRow", tr === "on-ramp" || tr === "off-ramp");
+    $("cgore").checked = sp.gore !== false;
     only("cgatesRow", tr === "railroad");
     only("cslipRow", atGrade && !["driveway", "on-ramp", "off-ramp"].includes(tr));
     only("cpocketRow", atGrade && !["driveway", "on-ramp", "off-ramp"].includes(tr));
@@ -139,6 +141,33 @@ function show(s) {
     $("cstub").value = sp.stub ?? "keep";
     for (const [id, v, d] of [["cdia", sp.diameter, 40], ["copen", sp.opening, ""], ["caccel", sp.accel_length, 120], ["cpocketlen", sp.pocket_length, 30]]) if (document.activeElement !== $(id)) $(id).value = v ?? d;
     $("ccancel").hidden = !cv.proposed;
+  }
+
+  // Lane-change card: on a selected line of a described road. The stored lane changes, and a form to describe a new one.
+  const tcard = t?.kind === "road" && s.road?.described && s.road.piece;
+  $("transitionCard").hidden = !tcard;
+  if (tcard) {
+    const list = $("tlist");
+    list.replaceChildren(...(s.road.transitions ?? []).map((e, i) => {
+      const rm = el("button", { className: "plain tiny", title: "Take this lane change away" }, "✕");
+      rm.onclick = () => act("removetransition", { index: i });
+      return el("li", { className: "legrow" }, el("span", { className: "name" }, e.summary || "lane change"), el("code", {}, e.after || ""), rm);
+    }));
+    const open = s.mode === "transition";
+    $("topen").hidden = open;
+    $("tform").hidden = !open;
+    if (open) {
+      const tr = pt?.transition ?? {};
+      $("tasked").textContent = pt?.description ? `You asked: “${pt.description}”` : "";
+      $("tasked").hidden = !pt?.description;
+      $("tchange").value = tr.change ?? "add";
+      $("tside").value = tr.side ?? "right";
+      $("tdir").value = tr.direction ?? "fwd";
+      $("tcount").value = String(tr.count ?? 1);
+      for (const [id, v] of [["tat", tr.at], ["tlen", tr.length], ["tspeed", tr.speed ?? 35]]) if (document.activeElement !== $(id)) $(id).value = v ?? "";
+      $("tsummary").textContent = pt ? `${pt.summary}. After it the road is: ${pt.after}` : "Choose what changes, or describe it in the box below.";
+      fillList("tchanges", null);
+    }
   }
 
   // Hub card: three or more roads that meet at one point.
@@ -181,7 +210,8 @@ function show(s) {
   $("road").hidden = !s.road || !!pj || !!cv || !!hv;
   if (s.road && !pj) drawItems($("items"), $("bar"), $("total"), s.road, !s.pending);
 
-  const pr = s.pending && !pj && !pc && !ph ? s.pending : null; // a proposed road
+  const pt = s.pending?.kind === "transition" ? s.pending : null; // a proposed lane change
+  const pr = s.pending && !pj && !pc && !ph && !pt ? s.pending : null; // a proposed road
   $("proposal").hidden = !pr;
   fillList("pchanges", pr ? pr.changes : null);
   $("asked").textContent = pr?.description ? `You asked: “${pr.description}”` : "";
@@ -198,7 +228,7 @@ function show(s) {
 
   const wordsFor = t?.kind === "crossing" ? "Describe the intersection, or the change you want (lighted, stop signs, left turn pockets, driveway, ramp, railroad, roundabout …)" : t?.kind === "hub" ? "Describe the intersection, or the change you want (lighted, all-way stop, crosswalks …)" : null;
   const junctionish = t?.kind === "junction" || (t?.kind === "line" && s.mode === "connection");
-  $("wordsLabel").textContent = wordsFor ?? (junctionish ? "Describe the junction, or the change you want" : "Describe the road, or the change you want");
+  $("wordsLabel").textContent = (t?.kind === "road" && s.mode === "transition" ? "Describe the lane change (for example: the right lane ends after 300 m)" : null) ?? wordsFor ?? (junctionish ? "Describe the junction, or the change you want" : "Describe the road, or the change you want");
   const canAct = !!t && t.kind !== "other" && !s.busy;
   $("propose").disabled = !canAct || !$("words").value.trim();
   $("draw").disabled = !canAct;
@@ -226,6 +256,7 @@ $("cmain").onchange = () => cpatch({ main: $("cmain").value || null });
 $("cbeacon").onchange = () => cpatch({ beacon: $("cbeacon").checked });
 $("cgates").onchange = () => cpatch({ gates: $("cgates").checked });
 $("cslip").onchange = () => cpatch({ slip: $("cslip").checked });
+$("cgore").onchange = () => cpatch({ gore: $("cgore").checked });
 $("cpocket").onchange = () => cpatch({ pocket: $("cpocket").value });
 $("cpocketlen").onchange = () => cpatch({ pocket_length: Number($("cpocketlen").value) || 30 });
 $("copen").onchange = () => cpatch({ opening: Number($("copen").value) || null });
@@ -235,6 +266,10 @@ $("htreat").onchange = () => hpatch({ treatment: $("htreat").value });
 $("hcross").onchange = () => hpatch({ crosswalks: $("hcross").checked });
 $("hstub").onchange = () => hpatch({ stub: $("hstub").value });
 $("hcancel").onclick = () => act("cancel");
+$("topen").onclick = () => act("mode", { mode: "transition" });
+$("tdone").onclick = () => act("mode", { mode: "road" });
+const tpatch = () => act("transition", { patch: { change: $("tchange").value, side: $("tside").value, direction: $("tdir").value, count: Number($("tcount").value), at: $("tat").value === "" ? null : Number($("tat").value), length: $("tlen").value === "" ? null : Number($("tlen").value), speed: Number($("tspeed").value) || 35 } });
+for (const id of ["tchange", "tside", "tdir", "tcount", "tat", "tlen", "tspeed"]) $(id).onchange = tpatch;
 $("cdia").onchange = () => cpatch({ diameter: Number($("cdia").value) || 40 });
 $("match").onclick = () => act("match");
 for (const r of document.querySelectorAll("input[name=mode]")) r.onchange = () => act("mode", { mode: r.value });

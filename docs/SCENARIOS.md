@@ -49,10 +49,23 @@ A short line named `junction.<id>` joins two road pieces; the road carries throu
 
 Geometry checks: every scenario has native tests with hand-worked positions (`core/tests/crossings.rs`, `core/tests/hubs.rs`) and was rendered headless at 10x and looked at.
 
+### Lane transitions (0.6, `core/src/transition.rs`, stored as `transitions.<road id>`)
+A road gains or loses lanes in one direction, on the driver's left (toward the centre of the road, in both directions, with right-hand traffic) or right
+(toward the edge). Select one line of a described road in the panel and use **Add or drop a lane on this line**, or describe it ("the right lane ends after
+300 m"). A transition is `{piece, at, change add|drop, side left|right, direction fwd|back, count 1-3, length, speed, to}`; `at` is metres from the start of
+that line (left out: the middle) and `piece` which line of the road (the panel fills it in).
+- **Taper length:** `length`, or the MUTCD lane-reduction formula (3B.12): `L = W x S` at 45 mph or more, `W x S^2 / 60` below, never under 100 ft; `speed` defaults to 35 mph (73.5 m for a 3.6 m lane).
+- **How it is drawn:** the line is cut into a plain stretch before, the taper, and a plain stretch after (named `gen.road.<id>.<piece>.taper1`, `.after1` ...). The taper overlays the two cross-sections: elements that exist in both are matched, a lane that exists only after widens from nothing, one that exists only before narrows to nothing, and every edge slides linearly. The elements the two sides share keep their place at the joints, so the road does not drift sideways: adding a lane on the right moves the right edge out and leaves everything else where it was; dropping the lane nearest the centre closes the gap from the outer edge.
+- **Which lane:** it is the outermost lane of that direction on that side (nearest the centre for left, nearest the edge for right), even when several lanes are identical. 1 to 4 lanes and back is a series of transitions; a drop cannot take the last lane in a direction.
+- **Limits:** a taper is drawn by sampling the line every 2 m, so keep tapers on gentle curves; a transition on a line that crossings trim at its start counts `at` from the trimmed start; overlapping tapers are skipped with a note.
+
+### Diverge and converge (gore, on the ramp treatments)
+`on-ramp` (also "merge", "converge") and `off-ramp` (also "diverge", "exit") work on either side: the ramp lies on the side of the through road where its line is, and the speed-change lane follows the direction the traffic beside it runs (right-hand traffic). The **gore** (`gore`, default on, `gore_length` 30 m) is the paved neutral area between the road's travel edge and the ramp's edge nearer the road, filled and marked with white chevrons 0.31 m (12 in) wide at 40 degrees to the lines, pointing toward approaching traffic (MUTCD 3B.25). Its nose is where the ramp's edge meets the road's travel edge; a diverge's gore widens downstream of the nose, a converge's upstream. It is left out where the ramp meets the road at a steep angle.
+
 ## Still planned
 - Yield signs and priority control on the minor road of a roundabout approach; pedestrian refuge islands at mid-block crossings on roads without a median.
 - Full cloverleaf connectors, collector-distributor roads, diamond and diverging-diamond interchanges.
-- Curved ramps that follow the drawn line (ramp strips are straight along the through road).
+- Curved ramps that follow the drawn line (ramp strips are straight along the through road); a gore between two roads that split in a Y (both continuing); lane transitions that cross a junction.
 - Signal phasing and school-zone beacons (20 mph when flashing), from the traffic tool's own list.
 
 ## How to add one

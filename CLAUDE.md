@@ -5,8 +5,8 @@ intersections. Read `README.md` for what it does and `docs/SCENARIOS.md` for the
 not a developer: keep chat answers short and plain. Never push to `main`; work on a branch.
 
 ## Layout
-- `core/` Rust library (compiled to the plug-in and to a native CLI): `crosssection.rs` (shorthand and layout), `offset.rs`, `roads.rs`, `junction.rs`, `crossing.rs` (spec, find, trims, approach marks, at-grade, overpass, roundabout), `scenarios.rs` (median opening, mid-block, railroad, ramp lanes, cloverleaf), `hub.rs` (three or more roads), `builder.rs` (the commands), `output.rs` (output written as text), `library/elements.json` (the 15 road elements).
-- `filter/` the plug-in's manifest and commands (version, parameters). `cli/` `road-builder-cli` (parse, edit, diff, parse-junction, parse-crossing, parse-hub, library): the panel uses it to check what an agent returns.
+- `core/` Rust library (compiled to the plug-in and to a native CLI): `crosssection.rs` (shorthand and layout), `offset.rs`, `roads.rs`, `junction.rs`, `crossing.rs` (spec, find, trims, approach marks, at-grade, overpass, roundabout), `scenarios.rs` (median opening, mid-block, railroad, ramp lanes, cloverleaf), `hub.rs` (three or more roads), `transition.rs` (lane count changes along a line), `builder.rs` (the commands), `output.rs` (output written as text), `library/elements.json` (the 15 road elements).
+- `filter/` the plug-in's manifest and commands (version, parameters). `cli/` `road-builder-cli` (parse, edit, diff, parse-junction, parse-crossing, parse-hub, parse-transition, library): the panel uses it to check what an agent returns.
 - `panel/` zero-dependency Node server on 127.0.0.1:8787 and the page; `panel/lib/layers.mjs` sorts the drawing into layers.
 - Tests: `cargo test --release` (all Rust) and `cd panel && node --test test/` (panel, against a fake VectorCraft in `panel/test/fake-vectorcraft.mjs`).
 
@@ -24,6 +24,7 @@ not a developer: keep chat answers short and plain. Never push to `main`; work o
 - Instruction budget (about 50 M plus 4,000 per input byte): write output as text and thin out points. Check long roads with `core/tests/real_map.rs`.
 - Right-hand traffic: facing along the line the RIGHT lane is `fwd` and the LEFT lane is `back`, so a two-lane road is `lane back | lane fwd`. Getting this backwards put stop bars on the wrong half of the road.
 - macOS `sed -i` needs `''`. Do not use AppleScript here (it triggers a permission prompt on the user's Mac).
+- Transitions: `derive` returns the exact operation (which lane appears or vanishes) because identical lanes cannot be told apart from the text; `align` uses it, with a longest-common-subsequence fallback for a hand-written `to`. Shared elements are pinned at the joints (`shift`).
 - When splicing code with a script, never compute offsets from text you have already changed (a splice once dropped the overpass and roundabout code: restore from `git show HEAD:<file>`).
 - A trim keeps one end of a line; a *gap* trim cuts the middle out (two pieces, second named `.part2` so click mapping still works).
 - A road that only touches another is found by extending its ends 30 m; test with the road stopping short, and with it stopping more than 30 m short (no intersection).

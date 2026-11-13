@@ -8,7 +8,7 @@ use serde_json::Value;
 const MANIFEST: &str = r#"{
   "id": "com.cosmicceo.roadbuilder.build",
   "name": "Build Road",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "kind": "filter",
   "author": "CosmicCEO",
   "description": "Builds roads from the lines you draw: a line named road.<id> becomes the road described by its cross-section (lanes, bike lanes, margins ...). Select All first, so every road is included.",
@@ -50,6 +50,13 @@ const MANIFEST: &str = r#"{
       }
     },
     {
+      "id": "set_transition",
+      "label": "Add or Drop a Lane",
+      "params": {
+        "description": {"type": "string", "default": "{\"change\": \"add\", \"side\": \"right\"}", "maxLength": 1000, "label": "Lane change (JSON)", "help": "change: add or drop; side: left (toward the centre) or right (toward the edge); direction: fwd or back; count 1 to 3; at: metres from the start of the line; length: taper in metres (else the MUTCD formula); speed in mph; piece: which line of the road. Select one line of the road."}
+      }
+    },
+    {
       "id": "add_junction",
       "label": "Add Junction",
       "params": {
@@ -71,6 +78,7 @@ fn run(input: &[u8], params: &Value) -> Result<Output, String> {
         Some("set_junction") => builder::set_junction_text(&input, params),
         Some("set_crossing") => builder::set_crossing_text(&input, params),
         Some("set_hub") => builder::set_hub_text(&input, params),
+        Some("set_transition") => builder::set_transition_text(&input, params),
         _ => builder::build_text(&input, params),
     }
     .map(Output::Raw)

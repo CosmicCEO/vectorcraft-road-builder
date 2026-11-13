@@ -6,7 +6,7 @@ Every entry names its source and section. status: verified = read in the primary
 
 **The NTSB** investigates accidents and recommends changes; it does not publish design dimensions. The federal source for markings, signs and signals is the FHWA MUTCD; for pedestrian facilities the US Access Board; for lane, kerb and turn-lane geometry the AASHTO Green Book (copyrighted, not reproduced here) and state design manuals.
 
-**55 entries:** 41 verified in the primary text, 12 verified in a state manual, 2 unverified.
+**56 entries:** 42 verified in the primary text, 12 verified in a state manual, 2 unverified.
 
 ## Sources
 
@@ -208,6 +208,18 @@ Plug-in: roundabout crosswalk nearest edge 6.2 m from the ring: **conforms**. Fi
 - rule: raised islands or medians of sufficient width can serve as a place of refuge for pedestrians; the minimum width for accessible refuge comes from the ADA standards (see PROWAG R302.2.1)
 
 > can serve as a place of refuge for pedestrians who are attempting to cross at a midblock or intersection location.
+
+### Chevron and diagonal markings in gores
+`gore.chevron` · verified · Federal Highway Administration MUTCD 3B.25 para 02D, 05, 10 · guidance
+
+- width at a speed limit of 45 mph or more, at least: 12 in (0.305 m)
+- width at a speed limit under 45 mph, at least: 8 in (0.203 m)
+- angle to the longitudinal lines: approximately 30 to 45 degrees
+- colour and direction: white, the point of each chevron facing toward approaching traffic
+
+> chevrons and diagonal markings should be at least 12 inches wide for roadways having a speed limit of 45 mph or greater, and at least 8 inches wide for roadways having a speed limit of less than 45 mph.
+
+Plug-in: gore chevrons 0.31 m wide at 40 degrees, white, pointing toward approaching traffic (scenarios.rs gore()): **conforms**. 12.2 in wide, in the 30 to 45 degree range. The gore's length (30 m by default) and the chevron spacing (6 m) are judgment, not standard.
 
 ## Geometry
 

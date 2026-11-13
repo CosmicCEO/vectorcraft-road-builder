@@ -86,6 +86,12 @@ After each Draw the panel sorts the drawing into layers: `road r1` holds `road r
 visible. The panel shows and unlocks these layers just for the rebuild (a hidden or locked object is not seen by a filter, so its road would
 vanish) and puts your hiding and locking back afterwards. Rebuilding from VectorCraft's own menu does not sort layers; press Draw in the panel.
 
+## Lane changes, diverge and converge (new in 0.6)
+Select one line of a road and choose **Add or drop a lane on this line** (or describe it: "the right lane ends after 300 m"). The road gains or loses
+1 to 3 lanes in one direction, on the driver's left (toward the centre) or right (toward the edge), over a taper that follows the MUTCD formula for the
+speed unless you give a length. Several in a row take a road from 1 to 4 lanes and back. Ramps (on-ramp, off-ramp; "merge", "converge", "diverge",
+"exit") work on either side of the road and now draw the gore: the paved neutral area with white chevrons pointing toward approaching traffic.
+
 ## Standards (new in 0.5)
 `library/standards.json` records the US design and dimension standards behind the drawing (MUTCD 11th Edition with Revision 1, US Access
 Board PROWAG, and state design manuals where the federal documents leave a number to the designer), each with section, quote and a verified

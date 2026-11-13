@@ -163,6 +163,58 @@ pub(crate) fn ramp_lane(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossi
     out.polygon(&format!("{base}.{name}"), &[at(0.0, edge - 0.15 * side), at(0.0, edge + w), at(d1, edge + w), at(d2, edge - 0.15 * side)], flip, PAVEMENT);
     out.path(&format!("{base}.{name}.lane-line"), &simplify_dashes(&at, edge, 0.0, d1), flip, WHITE, 0.15, false);
     out.path(&format!("{base}.{name}.edge"), &[vec![at(0.0, edge + w), at(d1, edge + w), at(d2, edge)]], flip, WHITE, 0.15, false);
+    if cs.gore {
+        return gore(out, base, cs, x, m, r, side, edge, long);
+    }
+    vec![]
+}
+
+/// The gore where the ramp and the through road part (an off-ramp: it widens downstream of the nose) or come together (an on-ramp: it widens upstream
+/// of the nose): the paved neutral area between the road's travel edge and the ramp's edge, with white chevrons pointing toward approaching traffic.
+/// The nose is where the ramp's edge nearer the road meets the road's travel edge. Skipped when the ramp meets the road at a steep angle.
+#[allow(clippy::too_many_arguments)]
+fn gore(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, m: &Arm, r: &Arm, side: f64, edge: f64, long: f64) -> Vec<String> {
+    let downstream = scale(m.t, side);
+    // Where each edge of the ramp meets the travel edge of the road, as a distance along the road in the downstream direction.
+    let meets = |u: f64| -> Option<f64> {
+        let rhs = sub(scale(m.n, edge), scale(r.n, u));
+        let det = cross2(r.t, scale(m.t, -1.0));
+        (det.abs() > 1e-9).then(|| cross2(r.t, rhs) / det)
+    };
+    let (Some(sa), Some(sb)) = (meets(r.lo), meets(r.hi)) else { return vec![] };
+    // Positions along `downstream`: the road's own coordinate is `m.t * s`, so flip the sign when the road is read the other way.
+    let (da, db) = (sa * side, sb * side);
+    let diverge = cs.treatment == Treatment::OffRamp;
+    let near_edge_u = if (diverge && db >= da) || (!diverge && db < da) { r.hi } else { r.lo };
+    let Some(s_nose) = meets(near_edge_u) else { return vec![] };
+    let nose = add(x.p, add(scale(m.n, edge), scale(m.t, s_nose)));
+    let dir_g = if diverge { downstream } else { scale(downstream, -1.0) };
+    let rd = scale(r.t, long);
+    let along = crate::geom::dot(rd, dir_g);
+    if along < 0.25 {
+        return vec![];
+    }
+    let perp = unit(sub(rd, scale(dir_g, along)));
+    let tan_theta = crate::geom::dot(rd, perp) / along;
+    let g = cs.gore_length;
+    let at = |u: f64, v: f64| add(add(nose, scale(dir_g, u)), scale(perp, v));
+    out.polygon(&format!("{base}.gore"), &[at(0.0, 0.0), at(g, 0.0), at(g, g * tan_theta)], flip, PAVEMENT);
+    // Chevrons point toward the approaching traffic: at the nose for a diverge (traffic comes from upstream), away from it for a merge.
+    let p = if diverge { -1.0 } else { 1.0 };
+    let tan_phi = GORE_CHEVRON_ANGLE_DEG.to_radians().tan();
+    let mut chevrons: Vec<Vec<P>> = Vec::new();
+    let mut u = 3.0 / tan_theta.max(0.05);
+    while u < g - 1.0 {
+        let vmax = u * tan_theta;
+        if vmax >= 1.2 {
+            let (vc, l) = (vmax / 2.0, if p < 0.0 { 0.9 * vmax / 2.0 / tan_phi } else { 0.9 * (vmax / 2.0) / (tan_phi + tan_theta) });
+            chevrons.push(vec![at(u - p * l, vc - l * tan_phi), at(u, vc), at(u - p * l, vc + l * tan_phi)]);
+        }
+        u += 6.0;
+    }
+    if !chevrons.is_empty() {
+        out.path(&format!("{base}.gore.chevrons"), &chevrons, flip, WHITE, GORE_CHEVRON_WIDTH, false);
+    }
     vec![]
 }
 

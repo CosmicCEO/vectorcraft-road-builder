@@ -46,7 +46,7 @@ impl Way {
         }
     }
 
-    fn compass(self) -> Option<P> {
+    pub(crate) fn compass(self) -> Option<P> {
         match self {
             Way::North => Some([0.0, 1.0]),
             Way::South => Some([0.0, -1.0]),

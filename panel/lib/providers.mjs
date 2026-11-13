@@ -4,8 +4,8 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { library, parseCrossSection, parseCrossing, parseHub, parseJunction } from "./cli.mjs";
-import { crossingSystemPrompt, crossingUserPrompt, extractJson, hubSystemPrompt, hubUserPrompt, extractLine, junctionSystemPrompt, junctionUserPrompt, systemPrompt, userPrompt } from "./prompt.mjs";
+import { library, parseCrossSection, parseCrossing, parseHub, parseJunction, parseTransition } from "./cli.mjs";
+import { transitionSystemPrompt, transitionUserPrompt, crossingSystemPrompt, crossingUserPrompt, extractJson, hubSystemPrompt, hubUserPrompt, extractLine, junctionSystemPrompt, junctionUserPrompt, systemPrompt, userPrompt } from "./prompt.mjs";
 
 const here = import.meta.dirname;
 
@@ -197,4 +197,29 @@ export async function proposeHub({ description, current = null, roads, provider,
     user = `${hubUserPrompt(request)}\n\nYour previous answer was: ${json || String(reply).slice(0, 300)}\nIt was rejected: ${parsed.error}\nReply again with a corrected JSON object only.`;
   }
   return { ok: false, error: `the agent could not produce a valid intersection: ${attempts.at(-1)?.error}`, attempts };
+}
+
+/**
+ * Turns a description of a change in the number of lanes into a validated transition. `crossSection` is the road's cross-section before it; `current`
+ * the transition being edited (an object). Returns {ok: true, transition, summary, after, attempts} or {ok: false, error, attempts}.
+ */
+export async function proposeTransition({ description, current = null, crossSection, provider, maxAttempts = 2 }) {
+  const system = transitionSystemPrompt();
+  const request = { description, current, crossSection, kind: "transition" };
+  let user = transitionUserPrompt(request);
+  const attempts = [];
+  for (let n = 1; n <= maxAttempts; n++) {
+    let reply;
+    try {
+      reply = await ask(provider, { system, user, request });
+    } catch (e) {
+      return { ok: false, error: e.message, attempts };
+    }
+    const json = extractJson(reply);
+    const parsed = json ? await parseTransition(json, crossSection) : { ok: false, error: "the answer had no JSON object in it" };
+    attempts.push({ reply: String(reply).slice(0, 600), json, ok: parsed.ok, error: parsed.error });
+    if (parsed.ok) return { ...parsed, attempts };
+    user = `${transitionUserPrompt(request)}\n\nYour previous answer was: ${json || String(reply).slice(0, 300)}\nIt was rejected: ${parsed.error}\nReply again with a corrected JSON object only.`;
+  }
+  return { ok: false, error: `the agent could not produce a valid lane change: ${attempts.at(-1)?.error}`, attempts };
 }

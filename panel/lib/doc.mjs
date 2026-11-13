@@ -9,6 +9,7 @@ export const SET_CROSS_SECTION = `plugin.${PLUGIN_ID}.set_cross_section`;
 export const SET_JUNCTION = `plugin.${PLUGIN_ID}.set_junction`;
 export const SET_CROSSING = `plugin.${PLUGIN_ID}.set_crossing`;
 export const SET_HUB = `plugin.${PLUGIN_ID}.set_hub`;
+export const SET_TRANSITION = `plugin.${PLUGIN_ID}.set_transition`;
 
 /** The segment id of a road line (`road.a` is `a`, plain `road` is `main`), or null. Mirrors core/src/roads.rs. */
 export function segmentId(name = "") {

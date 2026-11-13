@@ -93,6 +93,9 @@ fn marking_dimensions_are_within_the_mutcd() {
     let dotted = entry(&d, "line.dotted-lane");
     assert!((DOTTED_LANE_ON - f(&value(&dotted, "segment"), "si")).abs() < 0.002 && (DOTTED_LANE_OFF - f(&value(&dotted, "gap"), "si")).abs() < 0.002, "dotted lane line is 3 ft on, 9 ft off");
     assert!(MARKING_LINE_MIN >= f(&value(&entry(&d, "line.normal-width"), "width"), "min_si") - 1e-9, "thinnest marking line");
+    let gore = entry(&d, "gore.chevron");
+    assert!(GORE_CHEVRON_WIDTH >= f(&value(&gore, "width at a speed limit of 45 mph or more"), "si") - 1e-9, "gore chevron width");
+    assert!((30.0..=45.0).contains(&GORE_CHEVRON_ANGLE_DEG), "gore chevron angle");
 }
 
 #[test]

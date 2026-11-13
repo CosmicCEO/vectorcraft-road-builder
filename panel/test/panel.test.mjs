@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { Control } from "../lib/control.mjs";
-import { SET_CROSSING, SET_CROSS_SECTION, SET_HUB, SET_JUNCTION, PLUGIN_ID } from "../lib/doc.mjs";
+import { SET_CROSSING, SET_CROSS_SECTION, SET_HUB, SET_JUNCTION, SET_TRANSITION, PLUGIN_ID } from "../lib/doc.mjs";
 import { Panel } from "../lib/panel.mjs";
 import { fakeVectorCraft } from "./fake-vectorcraft.mjs";
 
@@ -446,4 +446,62 @@ test("the notes the last build left with the document are shown", async () => {
   const { panel, done } = await setup(vc);
   assert.deepEqual(panel.snapshot().notes, ["intersection k1: no stub to trim: both roads run more than 25 m past the crossing"]);
   done();
+});
+
+const oneRoad = (extra = {}) => fakeVectorCraft({ paths: [{ id: 2, name: "road.a" }, { id: 3, name: "road.a" }], selection: [3], spec: { segments: { a: TWO_LANE }, ...extra } });
+
+test("a lane change on the selected line is previewed with what it does, then drawn", async () => {
+  const vc = await oneRoad();
+  const { panel, done } = await setup(vc);
+  assert.equal(panel.snapshot().road.piece, 2, "the second line of road a is selected");
+  assert.deepEqual(panel.snapshot().road.transitions, []);
+  panel.setMode("transition");
+  await panel.editTransition({ change: "add", side: "right", count: 2, at: 150 });
+  const p = panel.snapshot().pending;
+  assert.equal(p.kind, "transition");
+  assert.equal(p.after, "lane back | lane fwd x3", "two lanes added to the one lane with the line");
+  assert.match(p.summary, /adds 2 lanes on the right \(toward the edge\)/);
+  assert.equal(p.transition.piece, 2);
+  assert.equal(steps(vc).length, 0, "nothing is applied until Draw");
+  await panel.editTransition({ change: "drop", side: "left", count: 5 });
+  assert.match(panel.snapshot().message, /cannot drop the last lane/);
+  await panel.draw();
+  assert.deepEqual(steps(vc), ["select.set", SET_TRANSITION, "select.all", "plugin.run", "select.set"]);
+  assert.deepEqual(vc.doc.spec.transitions.a.map((e) => [e.piece, e.at, e.count]), [[2, 150, 2]]);
+  const s = panel.snapshot();
+  assert.equal(s.road.transitions.length, 1);
+  assert.match(s.road.transitions[0].summary, /adds 2 lanes/);
+  assert.equal(s.road.transitions[0].after, "lane back | lane fwd x3");
+  done();
+});
+
+test("a stored lane change can be removed, and one belongs to its own line", async () => {
+  const stored = [{ piece: 2, at: 150, change: "add", side: "right", count: 1 }, { piece: 1, at: 40, change: "add", side: "left", count: 1 }];
+  const vc = await oneRoad({ transitions: { a: stored } });
+  const { panel, done } = await setup(vc);
+  assert.equal(panel.snapshot().road.transitions.length, 1, "only the selected line's own lane change is listed");
+  await panel.removeTransition(0);
+  assert.deepEqual(vc.doc.spec.transitions.a.map((e) => e.piece), [1], "the other line's lane change is untouched");
+  assert.equal(panel.snapshot().road.transitions.length, 0);
+  done();
+});
+
+test("an agent turns words into a lane change; the gore is a choice on a ramp", async () => {
+  const vc = await fakeVectorCraft({ paths: [{ id: 2, name: "road.a" }], selection: [2], spec: { segments: { a: { cross_section: "lane back | lane fwd x2", anchor: "auto" } } } });
+  const { panel, done } = await setup(vc, 'Here: {"change": "merge", "side": "right", "count": 1, "at": 300, "speed": 55}');
+  panel.setMode("transition");
+  await panel.propose("the right lane ends after 300 metres", "fake");
+  const p = panel.snapshot().pending;
+  assert.equal(p.kind, "transition");
+  assert.equal(p.transition.change, "drop");
+  assert.equal(p.transition.at, 300);
+  assert.equal(p.transition.speed, 55);
+  assert.equal(p.after, "lane back | lane fwd");
+  done();
+  const vc2 = await fakeVectorCraft({ paths: [{ id: 2, name: "road.a" }, { id: 3, name: "road.b" }], selection: [2, 3], spec: roads2 });
+  const two = await setup(vc2);
+  await two.panel.editCrossing({ treatment: "converge", gore: false });
+  assert.equal(two.panel.snapshot().pending.crossing.treatment, "on-ramp");
+  assert.equal(two.panel.snapshot().pending.crossing.gore, false);
+  two.done();
 });

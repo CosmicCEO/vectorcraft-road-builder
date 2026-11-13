@@ -1387,6 +1387,53 @@
    ]
   },
   {
+   "id": "gore.chevron",
+   "topic": "markings",
+   "title": "Chevron and diagonal markings in gores",
+   "applies_to": [
+    "ramp",
+    "diverge",
+    "converge"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3B.25 para 02D, 05, 10",
+   "status": "verified",
+   "values": [
+    {
+     "name": "width at a speed limit of 45 mph or more, at least",
+     "us": 12,
+     "unit_us": "in",
+     "si": 0.3048,
+     "unit_si": "m"
+    },
+    {
+     "name": "width at a speed limit under 45 mph, at least",
+     "us": 8,
+     "unit_us": "in",
+     "si": 0.2032,
+     "unit_si": "m"
+    },
+    {
+     "name": "angle to the longitudinal lines",
+     "text": "approximately 30 to 45 degrees"
+    },
+    {
+     "name": "colour and direction",
+     "text": "white, the point of each chevron facing toward approaching traffic"
+    }
+   ],
+   "quote": "chevrons and diagonal markings should be at least 12 inches wide for roadways having a speed limit of 45 mph or greater, and at least 8 inches wide for roadways having a speed limit of less than 45 mph.",
+   "code": [
+    {
+     "name": "gore chevrons 0.31 m wide at 40 degrees, white, pointing toward approaching traffic (scenarios.rs gore())",
+     "value_si": 0.31,
+     "conforms": true,
+     "note": "12.2 in wide, in the 30 to 45 degree range. The gore's length (30 m by default) and the chevron spacing (6 m) are judgment, not standard."
+    }
+   ]
+  },
+  {
    "id": "ped.clear-width",
    "topic": "pedestrian",
    "title": "Pedestrian access route clear width",

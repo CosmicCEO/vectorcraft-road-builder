@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { library } from "../lib/cli.mjs";
-import { crossingSystemPrompt, extractJson, extractLine, hubSystemPrompt, junctionSystemPrompt, junctionUserPrompt, systemPrompt, userPrompt } from "../lib/prompt.mjs";
-import { ask, loadProviders, propose, proposeHub, proposeJunction } from "../lib/providers.mjs";
+import { transitionSystemPrompt, crossingSystemPrompt, extractJson, extractLine, hubSystemPrompt, junctionSystemPrompt, junctionUserPrompt, systemPrompt, userPrompt } from "../lib/prompt.mjs";
+import { ask, loadProviders, propose, proposeHub, proposeJunction, proposeTransition } from "../lib/providers.mjs";
 
 const STORY = "facing N: bike-lane | apron | lane S x2 | margin 3 | lane N x2 | apron | bike-lane";
 const fake = (...replies) => {
@@ -156,4 +156,18 @@ test("a hub description is validated, and an invalid one is sent back once", asy
   const bad = await proposeHub({ description: "x", roads: ["a", "b", "c"], provider: fake("I cannot do that") });
   assert.equal(bad.ok, false);
   assert.match(bad.error, /could not produce a valid intersection/);
+});
+
+test("a lane change is validated, shows what the road becomes, and an invalid answer is sent back once", async () => {
+  assert.match(transitionSystemPrompt(), /toward the centre of the road/);
+  const p = fake('{"change": "grow", "side": "left"}', 'Sure: {"change": "add", "side": "left", "count": 2}');
+  const r = await proposeTransition({ description: "two lanes added on the left", crossSection: "lane back | lane fwd", provider: p });
+  assert.equal(r.ok, true);
+  assert.equal(r.after, "lane back | lane fwd x3");
+  assert.equal(r.attempts.length, 2);
+  assert.match(p.seen[1], /rejected: change must be add or drop/);
+  assert.match(p.seen[0], /cross-section before the change: lane back \| lane fwd/);
+  const bad = await proposeTransition({ description: "x", crossSection: "lane back | lane fwd", provider: fake("I cannot do that") });
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /could not produce a valid lane change/);
 });

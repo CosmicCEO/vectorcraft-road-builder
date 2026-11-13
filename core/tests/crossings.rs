@@ -325,7 +325,7 @@ fn a_trimmed_stub_makes_a_three_way_with_the_far_kerb_kept() {
     assert!(!n.iter().any(|x| x == "gen.crossing.k1.kerb.2" || x == "gen.crossing.k1.kerb.3"), "no kerb returns on the side where road b was trimmed: {n:?}");
     // Road a's east travel lanes end at x = 208.7 (1.5 + 2 x 3.6 m from its middle); its apron and bike lane beyond are not paved over.
     let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.box"));
-    assert!((lo[0] - 188.95).abs() < 0.01 && (hi[0] - 208.95).abs() < 0.01, "{lo:?} {hi:?}");
+    assert!((lo[0] - 188.95).abs() < 0.01 && (hi[0] - 208.7).abs() < 0.01, "{lo:?} {hi:?}");
 }
 
 #[test]
@@ -514,7 +514,7 @@ fn a_driveway_meets_the_road_with_a_small_return_and_no_marks() {
     }
     // Its paving covers road a's west edge, bike lane and apron across the driveway's width, but not the far (east) kerb and bike lane.
     let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.box"));
-    assert!((lo[0] - 188.95).abs() < 0.01 && (hi[0] - 208.95).abs() < 0.01, "{lo:?} {hi:?}");
+    assert!((lo[0] - 188.95).abs() < 0.01 && (hi[0] - 208.7).abs() < 0.01, "{lo:?} {hi:?}");
 }
 
 #[test]
@@ -535,8 +535,8 @@ fn offset_tees_are_two_separate_three_ways_on_one_road() {
     assert!((lo1[1] - 396.15).abs() < 0.01 && (hi1[1] - 403.85).abs() < 0.01, "k1 sits at y 400: {lo1:?} {hi1:?}");
     assert!((lo2[1] - 446.15).abs() < 0.01 && (hi2[1] - 453.85).abs() < 0.01, "k2 sits at y 450: {lo2:?} {hi2:?}");
     // Road b comes from the west so the box reaches road a's east travel edge; road c from the east, so it reaches the west one.
-    assert!((hi1[0] - 208.95).abs() < 0.01 && (lo1[0] - 188.95).abs() < 0.01);
-    assert!((lo2[0] - 191.05).abs() < 0.01 && (hi2[0] - 211.05).abs() < 0.01, "{lo2:?} {hi2:?}");
+    assert!((hi1[0] - 208.7).abs() < 0.01 && (lo1[0] - 188.95).abs() < 0.01);
+    assert!((lo2[0] - 191.3).abs() < 0.01 && (hi2[0] - 211.05).abs() < 0.01, "{lo2:?} {hi2:?}");
     // Two roads meeting the same road are two intersections: both are stored and drawn.
     assert_eq!(sp.crossings().len(), 2);
 }
@@ -722,4 +722,61 @@ fn a_cloverleaf_is_an_overpass_with_four_loop_ramps() {
     let b = [[200.0 - 400.0 * 0.866, 400.0 + 400.0 * 0.5], [200.0 + 400.0 * 0.866, 400.0 - 400.0 * 0.5]];
     let (_, notes) = run(&items(&b), &sp);
     assert!(notes.iter().any(|n| n.contains("close to a right angle")), "{notes:?}");
+}
+
+// ---- Gore: diverge and converge, right and left ----
+
+fn ramp_run(points: [[f64; 2]; 2], treatment: &str, extra: Value) -> Value {
+    let its = items(&points);
+    let mut c = json!({"roads": ["a", "b"], "treatment": treatment});
+    for (k, v) in extra.as_object().unwrap() {
+        c[k] = v.clone();
+    }
+    let sp = Spec::from_document_data(&json!({"segments": {"a": {"cross_section": DIVIDED}, "b": {"cross_section": "lane fwd"}}, "crossings": {"k1": c}}));
+    run(&its, &sp).0
+}
+
+#[test]
+fn an_on_ramp_has_a_gore_that_widens_upstream_of_its_nose() {
+    // The ramp comes from the south-east at 25 degrees. Its edge nearer the road meets the road's east travel edge (x 209.2) at document y 423.99:
+    // that is the nose. The gore runs 30 m upstream (south, to y 453.99) and 13.99 m wide at the end (the ramp's edge slopes at 25 degrees).
+    let v = ramp_run([[250.7, 508.8], [204.65, 409.97]], "on-ramp", json!({}));
+    let (lo, hi) = bbox(&pts(&v, "gen.crossing.k1.gore"));
+    assert!((lo[0] - 209.2).abs() < 0.05 && (hi[0] - 223.19).abs() < 0.05 && (lo[1] - 423.99).abs() < 0.05 && (hi[1] - 453.99).abs() < 0.05, "{lo:?} {hi:?}");
+    assert!(has(&v, "gen.crossing.k1.gore.chevrons"));
+    // Chevrons are 0.31 m (12 in) wide, white, drawn as V shapes: each has an apex and two arms (3 points).
+    let c = pts(&v, "gen.crossing.k1.gore.chevrons");
+    assert!(c.len() >= 6 && c.len() % 3 == 0, "{}", c.len());
+    // A merge's chevrons point away from the nose (toward the approaching traffic, upstream): the apex is south of its arms in document y (larger y).
+    assert!(c[1][1] > c[0][1] && c[1][1] > c[2][1], "{c:?}");
+}
+
+#[test]
+fn an_off_ramp_has_a_gore_that_widens_downstream_of_its_nose() {
+    // The ramp leaves toward the north-east: its near edge leaves the east travel edge at document y 376.0 (the nose); the gore runs 30 m downstream.
+    let v = ramp_run([[250.7, 291.2], [204.65, 390.03]], "off-ramp", json!({}));
+    let (lo, hi) = bbox(&pts(&v, "gen.crossing.k1.gore"));
+    assert!((lo[0] - 209.2).abs() < 0.05 && (hi[0] - 223.19).abs() < 0.05 && (lo[1] - 346.0).abs() < 0.05 && (hi[1] - 376.0).abs() < 0.05, "{lo:?} {hi:?}");
+    // A diverge's chevrons point at the nose, toward the traffic coming from upstream: the apex is south (larger document y) of its arms.
+    let c = pts(&v, "gen.crossing.k1.gore.chevrons");
+    assert!(c[1][1] > c[0][1] && c[1][1] > c[2][1], "{c:?}");
+}
+
+#[test]
+fn a_left_merge_is_the_same_gore_turned_half_way_round() {
+    // The road's west side carries southbound traffic. A ramp from the north-west merges into it: the picture turned 180 degrees about the crossing.
+    let v = ramp_run([[149.3, 291.2], [195.35, 390.03]], "on-ramp", json!({}));
+    let (lo, hi) = bbox(&pts(&v, "gen.crossing.k1.gore"));
+    assert!((lo[0] - 176.81).abs() < 0.05 && (hi[0] - 190.8).abs() < 0.05 && (lo[1] - 346.01).abs() < 0.05 && (hi[1] - 376.01).abs() < 0.05, "{lo:?} {hi:?}");
+    let (lo, hi) = bbox(&pts(&v, "gen.crossing.k1.accel"));
+    assert!((lo[0] - 187.2).abs() < 0.05 && (hi[0] - 190.95).abs() < 0.05 && (hi[1] - 520.0).abs() < 0.05 && (lo[1] - 400.0).abs() < 0.05, "the acceleration lane runs 120 m south, on the west side (3.6 m wide beside the west travel edge x 190.8): {lo:?} {hi:?}");
+}
+
+#[test]
+fn the_gore_can_be_switched_off_and_is_left_out_where_the_ramp_meets_the_road_steeply() {
+    let v = ramp_run([[250.7, 508.8], [204.65, 409.97]], "on-ramp", json!({"gore": false}));
+    assert!(!names(&v).iter().any(|n| n.contains("gore")));
+    let v = ramp_run([[300.0, 400.0], [206.0, 400.0]], "on-ramp", json!({}));
+    assert!(!names(&v).iter().any(|n| n.contains("gore")), "a ramp at a right angle has no gore");
+    assert!(has(&v, "gen.crossing.k1.accel"), "but it still gets its speed-change lane");
 }

@@ -165,6 +165,24 @@ fn run(args: &[String], lib: &Library) -> Value {
             };
             road_builder_core::hub::HubSpec::from_json(&value).map_or_else(fail, |h| json!({"ok": true, "hub": h.to_json(), "summary": h.summary()}))
         }
+        Some("parse-transition") => {
+            let Some(text) = args.get(1) else { return fail("usage: parse-transition '<transition JSON>' [\"current cross-section\"]") };
+            let value: Value = match serde_json::from_str(text) {
+                Ok(v) => v,
+                Err(e) => return fail(format!("not valid JSON: {e}")),
+            };
+            match road_builder_core::transition::TransitionSpec::from_json(&value) {
+                Err(e) => fail(e),
+                Ok(t) => {
+                    let after = args.get(2).map(|cs| parse(cs, lib).and_then(|p| road_builder_core::transition::describe_to(&p, lib, [0.0, 1.0], &t)));
+                    match after {
+                        Some(Err(e)) => fail(e),
+                        Some(Ok(text)) => json!({"ok": true, "transition": t.to_json(), "summary": t.summary(), "after": text}),
+                        None => json!({"ok": true, "transition": t.to_json(), "summary": t.summary()}),
+                    }
+                }
+            }
+        }
         Some("library") => {
             let els: Vec<Value> = lib
                 .names()
@@ -174,7 +192,7 @@ fn run(args: &[String], lib: &Library) -> Value {
                 .collect();
             json!({"ok": true, "elements": els})
         }
-        _ => fail("usage: road-builder-cli parse|edit|diff|parse-junction|parse-crossing|parse-hub|library ..."),
+        _ => fail("usage: road-builder-cli parse|edit|diff|parse-junction|parse-crossing|parse-hub|parse-transition|library ..."),
     }
 }
 

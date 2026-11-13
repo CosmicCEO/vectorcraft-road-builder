@@ -87,6 +87,7 @@
       <label id="cbeaconRow" hidden><input type="checkbox" id="cbeacon"> Flashing beacons</label>
       <label id="cgatesRow" hidden><input type="checkbox" id="cgates"> Gates</label>
       <label id="cslipRow"><input type="checkbox" id="cslip"> Right-turn slip lanes</label>
+      <label id="cgoreRow" hidden><input type="checkbox" id="cgore"> Gore with chevrons</label>
     </div>
     <div class="row wrap" id="cpocketRow">
       <label>Turn pockets
@@ -133,6 +134,29 @@
       </label>
     </div>
     <div class="row"><button id="hcancel" class="plain" hidden>Cancel</button></div>
+  </section>
+
+  <section id="transitionCard" class="card" hidden>
+    <h2>Lane changes on this line</h2>
+    <ol id="tlist" class="items"></ol>
+    <div class="row"><button id="topen" class="plain">Add or drop a lane on this line…</button></div>
+    <div id="tform" hidden>
+      <p id="tasked" class="muted asked" hidden></p>
+      <div class="row wrap">
+        <label>Change <select id="tchange"><option value="add">Add a lane</option><option value="drop">Drop a lane</option></select></label>
+        <label>On the <select id="tside"><option value="right">Right (toward the edge)</option><option value="left">Left (toward the centre)</option></select></label>
+        <label>Lanes <select id="tdir"><option value="fwd">with the line</option><option value="back">against the line</option></select></label>
+        <label>How many <select id="tcount"><option>1</option><option>2</option><option>3</option></select></label>
+      </div>
+      <div class="row wrap">
+        <label>Starts <input id="tat" type="number" min="0" step="10" placeholder="middle"> m from the start</label>
+        <label>Taper <input id="tlen" type="number" min="10" step="5" placeholder="by speed"> m</label>
+        <label>Speed <input id="tspeed" type="number" min="15" max="80" step="5" value="35"> mph</label>
+      </div>
+      <p id="tsummary"></p>
+      <ul id="tchanges" class="changes" hidden></ul>
+      <div class="row"><button id="tdone" class="plain">Done</button></div>
+    </div>
   </section>
 
   <section id="road" class="card" hidden>

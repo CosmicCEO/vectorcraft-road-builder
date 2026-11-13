@@ -78,7 +78,7 @@ impl Treatment {
             "four-way-stop" | "4-way-stop" | "all-way-stop" | "all-stop" => Treatment::FourWayStop,
             "driveway" | "side-entrance" | "entrance" | "curb-cut" | "access" | "access-road" => Treatment::Driveway,
             "median-opening" | "median-crossover" | "crossover" | "u-turn" | "u-turn-crossover" | "median-gap" | "median-break" => Treatment::MedianOpening,
-            "on-ramp" | "onramp" | "entrance-ramp" | "merge" | "acceleration-lane" => Treatment::OnRamp,
+            "on-ramp" | "onramp" | "entrance-ramp" | "merge" | "converge" | "acceleration-lane" => Treatment::OnRamp,
             "off-ramp" | "offramp" | "exit-ramp" | "exit" | "diverge" | "deceleration-lane" => Treatment::OffRamp,
             "midblock-crossing" | "mid-block-crossing" | "midblock" | "mid-block" | "pedestrian-crossing" | "ped-crossing" | "crosswalk" | "hawk" | "rrfb" => Treatment::MidblockCrossing,
             "railroad" | "railway" | "rail-crossing" | "railroad-crossing" | "level-crossing" | "grade-crossing" | "train-crossing" => Treatment::Railroad,
@@ -166,6 +166,9 @@ pub struct CrossingSpec {
     pub slip_radius: f64,
     /// Median opening length along the divided road. Left out, as long as the cross road is wide (a full opening is typically that wide).
     pub opening: Option<f64>,
+    /// Gore (the paved neutral area between the ramp and the road) with chevrons, and how long it is drawn.
+    pub gore: bool,
+    pub gore_length: f64,
     /// Ramp acceleration or deceleration lane: full-width length and taper.
     pub accel_length: f64,
     pub accel_taper: f64,
@@ -237,6 +240,8 @@ impl CrossingSpec {
             slip: v["slip"].as_bool().unwrap_or(false),
             slip_radius: v["slip_radius"].as_f64().unwrap_or(15.0).clamp(8.0, 40.0),
             opening: v["opening"].as_f64().map(|o| o.clamp(8.0, 40.0)),
+            gore: v["gore"].as_bool().unwrap_or(true),
+            gore_length: v["gore_length"].as_f64().unwrap_or(30.0).clamp(10.0, 100.0),
             accel_length: v["accel_length"].as_f64().unwrap_or(120.0).clamp(30.0, 400.0),
             accel_taper: v["accel_taper"].as_f64().unwrap_or(40.0).clamp(0.0, 150.0),
             beacon: v["beacon"].as_bool().unwrap_or(false),
@@ -251,7 +256,7 @@ impl CrossingSpec {
             "stub": if self.stub == Stub::Trim { "trim" } else { "keep" }, "stub_length": self.stub_length,
             "pocket": self.pocket.name(), "pocket_length": self.pocket_length, "pocket_taper": self.pocket_taper,
             "slip": self.slip, "slip_radius": self.slip_radius, "opening": self.opening,
-            "accel_length": self.accel_length, "accel_taper": self.accel_taper, "beacon": self.beacon, "gates": self.gates
+            "gore": self.gore, "gore_length": self.gore_length, "accel_length": self.accel_length, "accel_taper": self.accel_taper, "beacon": self.beacon, "gates": self.gates
         })
     }
 
@@ -624,7 +629,7 @@ pub(crate) fn clip(path: &[P], t: &Trim) -> Vec<P> {
 }
 
 /// The path between route metres `from` and `to`.
-fn slice_path(path: &[P], from: f64, to: f64) -> Vec<P> {
+pub(crate) fn slice_path(path: &[P], from: f64, to: f64) -> Vec<P> {
     let poly = Poly::new(path.to_vec());
     let mut cum = vec![0.0];
     for w in path.windows(2) {
@@ -934,8 +939,13 @@ fn at_grade(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: &[
     let corners = [(bd[0].0, bd[1].0), (bd[0].1, bd[1].0), (bd[0].1, bd[1].1), (bd[0].0, bd[1].1)].map(|(ua, ub)| corner_at(x, arms, ua, ub));
     let centre = scale(corners.iter().fold([0.0, 0.0], |s, &c| add(s, c)), 0.25);
     // Paved a little beyond the overlap (a quarter metre on every side) so the paving also covers the roads' edge lines where they open onto each other.
-    let m = 0.25;
-    let inflated = [(bd[0].0 - m, bd[1].0 - m), (bd[0].1 + m, bd[1].0 - m), (bd[0].1 + m, bd[1].1 + m), (bd[0].0 - m, bd[1].1 + m)].map(|(ua, ub)| corner_at(x, arms, ua, ub));
+    // Not on a side where a road's paving was stopped at its outer travel lane (a three-way): there the box ends at that lane's edge exactly.
+    let grow = |o: usize, hi: bool| {
+        let (now, full) = if hi { (bd[o].1, arms[o].hi) } else { (bd[o].0, arms[o].lo) };
+        if (now - full).abs() > 1e-9 { 0.0 } else { 0.25 }
+    };
+    let (a_lo, a_hi, b_lo, b_hi) = (grow(0, false), grow(0, true), grow(1, false), grow(1, true));
+    let inflated = [(bd[0].0 - a_lo, bd[1].0 - b_lo), (bd[0].1 + a_hi, bd[1].0 - b_lo), (bd[0].1 + a_hi, bd[1].1 + b_hi), (bd[0].0 - a_lo, bd[1].1 + b_hi)].map(|(ua, ub)| corner_at(x, arms, ua, ub));
     out.polygon(&format!("{base}.box"), &inflated, flip, PAVEMENT);
 
     // Rounded kerb corners: at each corner the two edges leave the box, and the arc rounds the space between them.
