@@ -83,6 +83,11 @@ impl Spec {
         v
     }
 
+    /// Remembers what the last build had to say (things guessed or skipped), for the panel to show. At most 30 lines.
+    pub fn set_notes(&mut self, notes: &[String]) {
+        self.raw["notes"] = Value::Array(notes.iter().take(30).map(|n| json!(n)).collect());
+    }
+
     /// Checks the text, then stores it in its canonical form. Returns what the parser had to guess.
     pub fn set_cross_section(&mut self, segment: &str, text: &str, anchor: Option<Anchor>) -> Result<Vec<String>, String> {
         let parsed = parse(text, &self.library)?;

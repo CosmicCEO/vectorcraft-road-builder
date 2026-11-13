@@ -278,7 +278,7 @@ fn emit(items: &[Item], spec: &Spec, id: &str, hs: &HubSpec, out: &mut Out) -> R
             }
             _ => Ctl::None,
         };
-        let ap = Approach { base: &base, arm: &h.arm, sign: h.sign, centre: lay.centre, ext: lay.ext[i], ctl, crosswalks: hs.crosswalks, pocket: crate::crossing::Pocket::None, pocket_length: 30.0, pocket_taper: 15.0 };
+        let ap = Approach { base: &base, arm: &h.arm, sign: h.sign, centre: lay.centre, ext: lay.ext[i], far: lay.ext[i], ctl, crosswalks: hs.crosswalks, pocket: crate::crossing::Pocket::None, pocket_length: 30.0, pocket_taper: 15.0 };
         notes.extend(approach(out, &ap));
         // A short arm that is kept ends in a kerb across its end.
         if h.remaining < hs.stub_length && hs.stub == Stub::Keep {

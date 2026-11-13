@@ -30,5 +30,5 @@ pub const YIELD_TRIANGLE_SPACE: f64 = 0.15;
 pub const MARKING_LINE_MIN: f64 = 0.11;
 /// Railroad: stop line at least 15 ft from the nearest rail (`rail.stop-line`).
 pub const RAIL_STOP_LINE_MIN: f64 = 4.58;
-/// Signal faces: primary faces at least 40 ft beyond the stop line (`signal.position`). Not yet applied: the drawn heads stand at the stop line.
+/// Signal faces: primary faces at least 40 ft beyond the stop line (`signal.position`).
 pub const SIGNAL_MIN_BEYOND_STOP_LINE: f64 = 12.2;

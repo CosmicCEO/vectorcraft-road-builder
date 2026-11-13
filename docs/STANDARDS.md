@@ -266,7 +266,7 @@ Plug-in: bike-lane element 1.5 m (4.9 ft): not comparable. Width comes from the 
 
 > No less than 40 feet beyond the stop line, and No more than 180 feet beyond the stop line unless a supplemental near-side signal face is provided.
 
-Plug-in: signal head 0.9 m past the stop bar (crossing.rs approach()): **does not conform**. The primary signal faces must stand at least 40 ft (12.2 m) beyond the stop line: on the far side of the intersection. A head at the stop line is only a supplemental near-side face (4D.08 para 03). Not fixed yet: draw the primary head on the far side at the driver's right, 12.2 m or more past the bar (and optionally a near-side one). It changes how every signalled intersection looks, so it waits for the owner's say.
+Plug-in: signal heads: a primary head on the far side, at least 12.2 m (40 ft) beyond the stop line, and a supplemental near-side head at the stop line (crossing.rs, hub.rs, junction.rs): **conforms**. Fixed: the primary head now stands beyond the far edge of the intersection, never nearer than SIGNAL_MIN_BEYOND_STOP_LINE (12.2 m); the near-side head the plug-in drew before is kept as the supplemental face (4D.08 para 03).
 
 ### Mounting height of signal faces
 `signal.height` · verified · Federal Highway Administration MUTCD 4D.09 para 01-02 · standard
@@ -574,7 +574,6 @@ Plug-in: ring width min(5.5 m, 0.3 x radius) = 5.5 m: **conforms**. 18.0 ft: at 
 
 | Entry | What the plug-in does | What to change |
 |---|---|---|
-| `signal.position` | signal head 0.9 m past the stop bar (crossing.rs approach()) | The primary signal faces must stand at least 40 ft (12.2 m) beyond the stop line: on the far side of the intersection. A head at the stop line is only a supplemental near-side face (4D.08 para 03). Not fixed yet: draw the primary head on the far side at the driver's right, 12.2 m or more past the bar (and optionally a near-side one). It changes how every signalled intersection looks, so it waits for the owner's say. |
 
 ## Not retrieved
 

@@ -747,6 +747,8 @@ pub(crate) struct Approach<'a> {
     pub centre: P,
     /// How far the paved box reaches along this arm from the centre.
     pub ext: f64,
+    /// How far it reaches the other way (the far side of the intersection, where the primary signal head stands).
+    pub far: f64,
     pub ctl: Ctl,
     pub crosswalks: bool,
     pub pocket: Pocket,
@@ -815,8 +817,14 @@ pub(crate) fn approach(out: &mut Out, ap: &Approach) -> Vec<String> {
     let pole = if right_is_plus { hi + 0.9 } else { lo - 0.9 };
     let c = at(dist + 0.9, pole);
     if ap.ctl == Ctl::Signal {
+        // The head at the stop line is the supplemental near-side face; the primary faces stand on the far side, at least 40 ft (12.2 m) beyond
+        // the stop line (MUTCD 4D.08), at the driver's right-hand kerb of the road that continues beyond the intersection.
         out.polygon(&format!("{}.signal.{tag}", ap.base), &polygon(4, c, 0.8), flip, [0.15, 0.15, 0.17]);
         out.polygon(&format!("{}.signal.{tag}.lamp", ap.base), &polygon(8, c, 0.28), flip, [0.2, 0.85, 0.3]);
+        let beyond = SIGNAL_MIN_BEYOND_STOP_LINE.max(dist + ap.far + 1.0);
+        let primary = at(dist - beyond, pole);
+        out.polygon(&format!("{}.signal.{tag}.far", ap.base), &polygon(4, primary, 0.8), flip, [0.15, 0.15, 0.17]);
+        out.polygon(&format!("{}.signal.{tag}.far.lamp", ap.base), &polygon(8, primary, 0.28), flip, [0.2, 0.85, 0.3]);
     } else {
         let radius = if lanes.len() >= 2 { STOP_SIGN_RADIUS_MULTI } else { STOP_SIGN_RADIUS_SINGLE };
         out.polygon(&format!("{}.sign.{tag}", ap.base), &polygon(8, c, radius), flip, [0.8, 0.12, 0.12]);
@@ -961,7 +969,7 @@ fn at_grade(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: &[
                 Treatment::TwoWayStop if arm.id == minor => Ctl::Stop,
                 _ => Ctl::None,
             };
-            let ap = Approach { base, arm, sign, centre: x.p, ext: reach(&corners, x.p, scale(arm.t, sign)), ctl, crosswalks: cs.crosswalks, pocket: cs.pocket, pocket_length: cs.pocket_length, pocket_taper: cs.pocket_taper };
+            let ap = Approach { base, arm, sign, centre: x.p, ext: reach(&corners, x.p, scale(arm.t, sign)), far: reach(&corners, x.p, scale(arm.t, -sign)), ctl, crosswalks: cs.crosswalks, pocket: cs.pocket, pocket_length: cs.pocket_length, pocket_taper: cs.pocket_taper };
             notes.extend(approach(out, &ap));
         }
     }

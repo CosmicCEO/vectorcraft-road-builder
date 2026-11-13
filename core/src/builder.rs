@@ -135,6 +135,7 @@ pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
     }
 
     let mut out = Out::new();
+    let mut notes: Vec<String> = Vec::new();
     for it in items.iter().filter(|i| !i.name.starts_with(GEN_PREFIX)) {
         let Some(id) = it.id else { continue };
         // The line you drew stays on top of what is built from it, and is drawn bold so it is easy to find and click.
@@ -149,15 +150,18 @@ pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
     if has_road {
         let mut trims = crossing::trims(&items, &spec);
         trims.extend(hub::trims(&items, &spec));
-        roads::build_clipped(&items, &spec, &trims, &mut out);
-        junction::build(&items, &spec, &mut out); // junctions are drawn over the roads they join
-        crossing::build(&items, &spec, &mut out); // and so are intersections where two roads cross
-        hub::build(&items, &spec, &mut out); // and where three or more meet
+        notes.extend(roads::build_clipped(&items, &spec, &trims, &mut out));
+        notes.extend(junction::build(&items, &spec, &mut out)); // junctions are drawn over the roads they join
+        notes.extend(crossing::build(&items, &spec, &mut out)); // and so are intersections where two roads cross
+        notes.extend(hub::build(&items, &spec, &mut out)); // and where three or more meet
     }
     if has_legacy {
         build_legacy(&mut out, &items, params)?;
     }
-    Ok(out.finish())
+    // What the build had to say is kept with the document so the panel can show it; the rest of the stored data is carried over unchanged.
+    let mut spec = spec;
+    spec.set_notes(&notes);
+    Ok(out.finish_with(Some(&spec.to_value())))
 }
 
 /// The original model: one `centerline` plus profile curves, flags and junction markers (see `scene`).

@@ -53,8 +53,16 @@ function drawItems(list, bar, total, view, editable) {
   total.textContent = `${view.items.length} elements, ${view.total_width} m wide${view.facing ? `, read facing ${view.facing}` : ""}`;
 }
 
+function fillList(id, items) {
+  const ul = $(id);
+  ul.replaceChildren(...(items ?? []).map((t) => el("li", {}, t)));
+  ul.hidden = !items?.length;
+}
+
 function show(s) {
   state = s;
+  $("notesCard").hidden = !s.notes?.length;
+  $("notes").replaceChildren(...(s.notes ?? []).map((n) => el("li", {}, n)));
   $("dot").classList.toggle("on", !!s.connected);
   $("problem").hidden = !s.error;
   $("problem").textContent = s.error ?? "";
@@ -98,6 +106,7 @@ function show(s) {
     $("casked").textContent = pc?.description ? `You asked: “${pc.description}”` : "";
     $("casked").hidden = !pc?.description;
     $("csummary").textContent = cv.summary;
+    fillList("cchanges", pc ? pc.changes : null);
     $("ctreat").value = tr;
     const atGrade = ["signal", "two-way-stop", "four-way-stop", "uncontrolled", "driveway", "on-ramp", "off-ramp"].includes(tr);
     const pick = (id, blank) => {
@@ -141,6 +150,7 @@ function show(s) {
     $("hasked").textContent = ph?.description ? `You asked: “${ph.description}”` : "";
     $("hasked").hidden = !ph?.description;
     $("hsummary").textContent = hv.summary;
+    fillList("hchanges", ph ? ph.changes : null);
     $("htreat").value = hv.spec.treatment;
     $("hcross").checked = !!hv.spec.crosswalks;
     $("hstub").value = hv.spec.stub ?? "keep";
@@ -155,6 +165,7 @@ function show(s) {
     $("jasked").textContent = pj?.description ? `You asked: “${pj.description}”` : "";
     $("jasked").hidden = !pj?.description;
     $("jsummary").textContent = jv.summary;
+    fillList("jchanges", pj ? pj.changes : null);
     const legs = $("jlegs");
     legs.replaceChildren();
     jv.spec.legs.forEach((l, i) => {
@@ -172,6 +183,7 @@ function show(s) {
 
   const pr = s.pending && !pj && !pc && !ph ? s.pending : null; // a proposed road
   $("proposal").hidden = !pr;
+  fillList("pchanges", pr ? pr.changes : null);
   $("asked").textContent = pr?.description ? `You asked: “${pr.description}”` : "";
   $("asked").hidden = !pr?.description;
   if (pr) {

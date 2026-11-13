@@ -71,13 +71,19 @@ fn three_roads_through_one_point_make_six_arms_round_one_core() {
     assert!(has(&out, "gen.hub.h1.core"));
     // Six arms, each with a stop bar and a signal (three roads, two ends each).
     assert_eq!(n.iter().filter(|x| x.starts_with("gen.hub.h1.stop.")).count(), 6, "{n:?}");
-    assert_eq!(n.iter().filter(|x| x.starts_with("gen.hub.h1.signal.") && !x.ends_with(".lamp")).count(), 6);
+    assert_eq!(n.iter().filter(|x| x.starts_with("gen.hub.h1.signal.") && !x.ends_with(".lamp") && !x.ends_with(".far")).count(), 6, "a near-side head at each stop bar");
+    assert_eq!(n.iter().filter(|x| x.starts_with("gen.hub.h1.signal.") && x.ends_with(".far")).count(), 6, "and a primary head on the far side of each");
     // Kerb returns at the corners between neighbouring arms (all six gaps are wide enough to round).
     assert!((1..=6).all(|k| has(&out, &format!("gen.hub.h1.kerb.{k}"))), "{n:?}");
     // The north arm of road a: its two neighbouring corners are (3.6, 8.7) with the 45-degree arm and (-3.6, 3.6) with the west arm, so the core
     // reaches 8.7 m along it; the stop bar is 1.6 m beyond (1 m gap and 0.6 m), over the southbound lanes (x 196.4..200), at document y 389.7.
     let (lo, hi) = bbox(&pts(&out, "gen.hub.h1.stop.a.after"));
     assert!((lo[0] - 196.4).abs() < 0.01 && (hi[0] - 200.0).abs() < 0.01 && (lo[1] - 389.7).abs() < 0.01, "{lo:?} {hi:?}");
+    // Its primary signal head is on the far (south) side, at the driver's right (west) kerb: the bar is 10.3 m out and the head 20 m beyond it (over
+    // the 12.2 m minimum), so 9.7 m south of the middle.
+    let c = bbox(&pts(&out, "gen.hub.h1.signal.a.after.far"));
+    let (cx, cy) = ((c.0[0] + c.1[0]) / 2.0, (c.0[1] + c.1[1]) / 2.0);
+    assert!((cx - 195.5).abs() < 0.15 && (cy - 409.7).abs() < 0.15, "{cx} {cy}");
 }
 
 #[test]

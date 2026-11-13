@@ -61,11 +61,11 @@ fn the_database_is_well_formed() {
 }
 
 #[test]
-fn the_database_records_the_gaps_it_knows_about() {
-    // Only the primary signal head position is still known not to conform; everything else was fixed and says so.
+fn the_database_records_no_known_gaps() {
+    // Everything the plug-in draws that a standard covers now conforms; a new gap must be recorded as conforms: false and listed here on purpose.
     let d = db();
     let gaps: Vec<String> = d["entries"].as_array().unwrap().iter().flat_map(|e| e["code"].as_array().unwrap_or(&vec![]).iter().filter(|c| c["conforms"] == false).map(|_| e["id"].as_str().unwrap().to_string()).collect::<Vec<_>>()).collect();
-    assert_eq!(gaps, vec!["signal.position".to_string()], "{gaps:?}");
+    assert!(gaps.is_empty(), "{gaps:?}");
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn crossing_and_sign_dimensions_are_within_the_standards() {
     within(MIDBLOCK_YIELD_SETBACK, f(&m, "min_si"), f(&m, "max_si"), "mid-block yield line setback");
     assert!(ROUNDABOUT_CROSSWALK_SETBACK >= f(&value(&entry(&d, "crosswalk.roundabout-setback"), "minimum distance"), "si") - 1e-9, "roundabout crosswalk setback");
     assert!(RAIL_STOP_LINE_MIN >= f(&value(&entry(&d, "rail.stop-line"), "passive crossing"), "si") - 1e-9, "railroad stop line");
-    assert!(SIGNAL_MIN_BEYOND_STOP_LINE >= f(&value(&entry(&d, "signal.position"), "distance beyond the stop line, minimum"), "si") - 1e-9);
+    assert!(SIGNAL_MIN_BEYOND_STOP_LINE >= f(&value(&entry(&d, "signal.position"), "distance beyond the stop line, minimum"), "si") - 1e-9, "primary signal head distance");
     // An octagon of circumradius r is 2 r cos(22.5 degrees) across its flats: 30 in (single lane) and 36 in (multi-lane).
     let flats = |r: f64| 2.0 * r * (std::f64::consts::PI / 8.0).cos();
     let sign = entry(&d, "sign.stop-size");

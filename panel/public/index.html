@@ -18,6 +18,11 @@
 
   <section id="context" class="card"></section>
 
+  <section id="notesCard" class="card notes" hidden>
+    <h2>Notes from the last build</h2>
+    <ul id="notes" class="changes"></ul>
+  </section>
+
   <section id="modeCard" class="card" hidden>
     <fieldset class="mode">
       <label><input type="radio" name="mode" value="road" checked> A road</label>
@@ -32,6 +37,7 @@
     <h2 id="jtitle">Junction</h2>
     <p id="jasked" class="muted asked" hidden></p>
     <p id="jsummary"></p>
+    <ul id="jchanges" class="changes" hidden></ul>
     <ol id="jlegs" class="items"></ol>
     <div class="row wrap">
       <label>Control <select id="jcontrol"><option value="none">none</option><option value="signal">traffic signals</option><option value="stop">stop signs</option></select></label>
@@ -44,6 +50,7 @@
     <h2 id="ctitle">Intersection</h2>
     <p id="casked" class="muted asked" hidden></p>
     <p id="csummary"></p>
+    <ul id="cchanges" class="changes" hidden></ul>
     <div class="row wrap">
       <label>What is it
         <select id="ctreat">
@@ -107,6 +114,7 @@
     <h2 id="htitle">Roads meeting at a point</h2>
     <p id="hasked" class="muted asked" hidden></p>
     <p id="hsummary"></p>
+    <ul id="hchanges" class="changes" hidden></ul>
     <div class="row wrap">
       <label>What is it
         <select id="htreat">
@@ -136,6 +144,7 @@
   <section id="proposal" class="card proposal" hidden>
     <h2>Proposed change</h2>
     <p id="asked" class="muted asked"></p>
+    <ul id="pchanges" class="changes" hidden></ul>
     <div id="pbar" class="bar"></div>
     <ol id="pitems" class="items"></ol>
     <p id="ptotal" class="muted"></p>

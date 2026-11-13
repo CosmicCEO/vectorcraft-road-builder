@@ -1,7 +1,10 @@
 // The panel's brain: follows the selection in VectorCraft, shows the selected road's description, turns words into a proposed
 // change with an agent, and on Draw applies it (Describe Road, then Build Road) without losing the user's selection.
 import { EventEmitter } from "node:events";
-import { editCrossSection, parseCrossSection, parseCrossing, parseHub, parseJunction } from "./cli.mjs";
+import { diffCrossSection, editCrossSection, parseCrossSection, parseCrossing, parseHub, parseJunction } from "./cli.mjs";
+import { describeChanges } from "./changes.mjs";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { PLUGIN_ID, SET_CROSSING, SET_CROSS_SECTION, SET_HUB, SET_JUNCTION, allPaths, classify, inspectState, junctionId, nodes, readSpec, segmentId } from "./doc.mjs";
 import { organise, unlockOurs } from "./layers.mjs";
 import { propose as proposeWith, proposeCrossing, proposeHub, proposeJunction } from "./providers.mjs";
@@ -11,7 +14,6 @@ const DEFAULT_CROSSING = { treatment: "signal", crosswalks: true, minor: null, o
 const DEFAULT_HUB = { treatment: "signal", crosswalks: true, minor: null, stub: "keep" };
 const CROSSING_KEYS = ["treatment", "crosswalks", "radius", "minor", "over", "main", "diameter", "stub", "pocket", "pocket_length", "pocket_taper", "slip", "slip_radius", "opening", "accel_length", "accel_taper", "beacon", "gates"];
 const HUB_KEYS = ["treatment", "crosswalks", "radius", "minor", "stub"];
-const NOT_BUILT = "A cloverleaf is not built yet; an overpass is the closest for now.";
 
 export class Panel extends EventEmitter {
   constructor({ control, providers }) {
@@ -19,7 +21,7 @@ export class Panel extends EventEmitter {
     this.control = control;
     this.providers = providers;
     this.provider = providers.default;
-    this.state = { connected: false, error: null, doc: null, selection: [], target: null, road: null, junction: null, crossing: null, hub: null, mode: "road", pending: null, busy: null, message: null };
+    this.state = { connected: false, error: null, doc: null, selection: [], notes: [], target: null, road: null, junction: null, crossing: null, hub: null, mode: "road", pending: null, busy: null, message: null };
     this.last = { revision: null, selection: "" };
     this.spec = null;
     this.queue = Promise.resolve();
@@ -127,7 +129,7 @@ export class Panel extends EventEmitter {
     }
     // A proposal belongs to what was selected when it was made.
     const keep = this.state.pending && !selectionChanged;
-    this.#set({ connected: true, error: null, doc: { title: s.title, revision: s.revision }, selection: sel, target, road, junction, crossing, hub, pending: keep ? this.state.pending : null, message: keep ? this.state.message : null });
+    this.#set({ connected: true, error: null, doc: { title: s.title, revision: s.revision }, notes: this.spec?.notes ?? [], selection: sel, target, road, junction, crossing, hub, pending: keep ? this.state.pending : null, message: keep ? this.state.message : null });
   }
 
   /** Words to a proposed cross-section (not applied until Draw). */
@@ -135,30 +137,25 @@ export class Panel extends EventEmitter {
     return this.#serial(async () => {
       const t = this.state.target;
       if (!t || t.kind === "other") return this.#set({ message: "Select one line (or one road) first." });
-      const provider = this.providers.providers[providerId ?? this.provider];
-      if (!provider) return this.#set({ message: `Unknown agent "${providerId}".` });
+      const first = providerId ?? this.provider;
+      if (!this.providers.providers[first]) return this.#set({ message: `Unknown agent "${providerId}".` });
+      // The chosen agent first; if it cannot give a valid answer, the one named in its `fallback`.
+      const order = [first];
+      const fb = this.providers.providers[first].fallback;
+      if (fb && fb !== first && this.providers.providers[fb] && this.#available(this.providers.providers[fb])) order.push(fb);
       this.#set({ busy: "thinking", message: null });
       try {
-        if (t.kind === "hub") {
-          const h = this.state.hub;
-          const r = await proposeHub({ description, current: h?.described ? h.spec : null, roads: h.roads, provider });
-          return this.#set(r.ok ? { pending: { kind: "hub", hub: r.hub, summary: r.summary, source: "agent", agent: providerId ?? this.provider, description }, message: null } : { message: r.error });
+        let failure = null;
+        for (const [n, id] of order.entries()) {
+          const r = await this.#ask(t, description, this.providers.providers[id], id);
+          if (r.pending) {
+            const label = (x) => this.providers.providers[x].label ?? x;
+            const said = r.message ?? (n > 0 ? null : null);
+            return this.#set({ pending: r.pending, message: n > 0 ? `${label(first)} could not give a valid answer, so ${label(id)} answered.${said ? ` ${said}` : ""}` : said ?? null });
+          }
+          failure = r.message;
         }
-        if (t.kind === "crossing") {
-          const c = this.state.crossing;
-          const r = await proposeCrossing({ description, current: c?.described ? c.spec : null, roads: c.roads, provider });
-          return this.#set(r.ok ? { pending: { kind: "crossing", crossing: r.crossing, summary: r.summary, source: "agent", agent: providerId ?? this.provider, description }, message: null } : { message: r.error });
-        }
-        const asJunction = t.kind === "junction" || (t.kind === "line" && this.state.mode === "connection");
-        if (asJunction) {
-          const j = this.state.junction;
-          const current = j?.described ? j.spec : null;
-          const r = await proposeJunction({ description, current, provider });
-          return this.#set(r.ok ? { pending: { kind: "junction", junction: r.junction, summary: r.summary, source: "agent", agent: providerId ?? this.provider, description }, message: null } : { message: r.error });
-        }
-        const current = this.state.road?.described ? this.state.road.text : null;
-        const r = await proposeWith({ description, current, provider });
-        this.#set(r.ok ? { pending: { ...r, source: "agent", agent: providerId ?? this.provider, description }, message: r.notes?.length ? `The agent read: ${r.notes.join("; ")}` : null } : { message: r.error });
+        this.#set({ message: failure });
       } catch (e) {
         this.#set({ message: e.message });
       } finally {
@@ -167,13 +164,51 @@ export class Panel extends EventEmitter {
     });
   }
 
+  /** One agent's attempt for the current target: {pending, message?} when it gave a valid proposal, else {message}. */
+  async #ask(t, description, provider, id) {
+    const base = { source: "agent", agent: id, description };
+    if (t.kind === "hub") {
+      const h = this.state.hub;
+      const r = await proposeHub({ description, current: h?.described ? h.spec : null, roads: h.roads, provider });
+      return r.ok ? { pending: { kind: "hub", hub: r.hub, summary: r.summary, changes: describeChanges(h?.described ? h.spec : null, r.hub), ...base } } : { message: r.error };
+    }
+    if (t.kind === "crossing") {
+      const c = this.state.crossing;
+      const r = await proposeCrossing({ description, current: c?.described ? c.spec : null, roads: c.roads, provider });
+      return r.ok ? { pending: { kind: "crossing", crossing: r.crossing, summary: r.summary, changes: describeChanges(c?.described ? c.spec : null, r.crossing), ...base } } : { message: r.error };
+    }
+    if (t.kind === "junction" || (t.kind === "line" && this.state.mode === "connection")) {
+      const j = this.state.junction;
+      const current = j?.described ? j.spec : null;
+      const r = await proposeJunction({ description, current, provider });
+      return r.ok ? { pending: { kind: "junction", junction: r.junction, summary: r.summary, changes: describeChanges(current, r.junction, "junction"), ...base } } : { message: r.error };
+    }
+    const current = this.state.road?.described ? this.state.road.text : null;
+    const r = await proposeWith({ description, current, provider });
+    if (!r.ok) return { message: r.error };
+    return { pending: { ...r, changes: await this.#roadChanges(current, r), ...base }, message: r.notes?.length ? `The agent read: ${r.notes.join("; ")}` : null };
+  }
+
+  /** Plain words for what a proposed cross-section changes compared with the current one (or what it is, for a new road). */
+  async #roadChanges(current, proposed) {
+    if (!current) return [`a new road: ${proposed.items?.length ?? 0} elements, ${proposed.total_width} m wide`];
+    const d = await diffCrossSection(current, proposed.canonical);
+    return d.ok ? (d.changes.length ? d.changes : ["no change"]) : [];
+  }
+
+  /** Is an agent usable here? An optional command-line agent is hidden when its program is not installed. */
+  #available(p) {
+    if (!p.optional || p.kind !== "cli" || !p.command) return true;
+    return existsSync(resolve(import.meta.dirname, "../..", p.command)) || existsSync(p.command);
+  }
+
   /** Edits the proposed (or current) cross-section: ["delete", i] | ["move", from, to] | ["width", i, m] | ["insert", i, "text"]. */
   edit(op) {
     return this.#serial(async () => {
       const base = this.state.pending?.canonical ?? this.state.road?.text;
       if (!base) return this.#set({ message: "Select a road or a line first." });
       const r = await editCrossSection(base, op);
-      this.#set(r.ok ? { pending: { ...r, source: "edit" }, message: null } : { message: r.error });
+      this.#set(r.ok ? { pending: { ...r, source: "edit", changes: await this.#roadChanges(this.state.road?.described ? this.state.road.text : null, r) }, message: null } : { message: r.error });
     });
   }
 
@@ -181,7 +216,7 @@ export class Panel extends EventEmitter {
   setText(text) {
     return this.#serial(async () => {
       const r = await parseCrossSection(text);
-      this.#set(r.ok ? { pending: { ...r, source: "typed" }, message: r.notes?.length ? `Read as: ${r.notes.join("; ")}` : null } : { message: r.error });
+      this.#set(r.ok ? { pending: { ...r, source: "typed", changes: await this.#roadChanges(this.state.road?.described ? this.state.road.text : null, r) }, message: r.notes?.length ? `Read as: ${r.notes.join("; ")}` : null } : { message: r.error });
     });
   }
 
@@ -220,7 +255,7 @@ export class Panel extends EventEmitter {
       for (const k of ["control", "crosswalks", "radius"]) if (patch[k] !== undefined) next[k] = patch[k];
       if (Number.isInteger(patch.removeLeg)) next.legs.splice(patch.removeLeg, 1);
       const r = await parseJunction(JSON.stringify(next));
-      this.#set(r.ok ? { pending: { kind: "junction", junction: r.junction, summary: r.summary, source: "edit" }, message: null } : { message: r.error });
+      this.#set(r.ok ? { pending: { kind: "junction", junction: r.junction, summary: r.summary, source: "edit", changes: describeChanges(this.state.junction?.described ? this.state.junction.spec : null, r.junction, "junction") }, message: null } : { message: r.error });
     });
   }
 
@@ -232,7 +267,8 @@ export class Panel extends EventEmitter {
       const next = { ...base, roads: this.state.crossing.roads };
       for (const k of CROSSING_KEYS) if (patch[k] !== undefined) next[k] = patch[k];
       const r = await parseCrossing(JSON.stringify(next));
-      this.#set(r.ok ? { pending: { kind: "crossing", crossing: r.crossing, summary: r.summary, source: "edit" }, message: r.crossing.treatment === "cloverleaf" ? NOT_BUILT : null } : { message: r.error });
+      const stored = this.state.crossing.described ? this.state.crossing.spec : null;
+      this.#set(r.ok ? { pending: { kind: "crossing", crossing: r.crossing, summary: r.summary, source: "edit", changes: describeChanges(stored, r.crossing) }, message: null } : { message: r.error });
     });
   }
 
@@ -244,7 +280,8 @@ export class Panel extends EventEmitter {
       const next = { ...base, roads: this.state.hub.roads };
       for (const k of HUB_KEYS) if (patch[k] !== undefined) next[k] = patch[k];
       const r = await parseHub(JSON.stringify(next));
-      this.#set(r.ok ? { pending: { kind: "hub", hub: r.hub, summary: r.summary, source: "edit" }, message: null } : { message: r.error });
+      const stored = this.state.hub.described ? this.state.hub.spec : null;
+      this.#set(r.ok ? { pending: { kind: "hub", hub: r.hub, summary: r.summary, source: "edit", changes: describeChanges(stored, r.hub) }, message: null } : { message: r.error });
     });
   }
 
@@ -266,7 +303,6 @@ export class Panel extends EventEmitter {
           await this.control.run(SET_HUB, { params: { description: JSON.stringify(spec) } });
         } else if (t.kind === "crossing") {
           const spec = pending?.kind === "crossing" ? pending.crossing : this.state.crossing.spec;
-          if (spec.treatment === "cloverleaf") throw new Error(NOT_BUILT);
           await this.control.run("select.set", { ids: t.ids });
           await this.control.run(SET_CROSSING, { params: { description: JSON.stringify(spec) } });
         } else if (pending?.kind === "junction") {
@@ -279,7 +315,8 @@ export class Panel extends EventEmitter {
           await this.control.run(SET_CROSS_SECTION, { params });
         }
         await this.#build(t.ids);
-        this.#set({ pending: null, message: pending || t.kind === "crossing" || t.kind === "hub" ? "Drawn." : "Rebuilt." });
+        this.spec = await readSpec(this.control);
+        this.#set({ pending: null, notes: this.spec.notes ?? [], message: pending || t.kind === "crossing" || t.kind === "hub" ? "Drawn." : "Rebuilt." });
       } catch (e) {
         this.#set({ message: `Could not draw: ${e.message}` });
       } finally {
@@ -304,7 +341,7 @@ export class Panel extends EventEmitter {
   }
 
   snapshot() {
-    return { ...this.state, agents: { default: this.provider, list: Object.entries(this.providers.providers).map(([id, p]) => ({ id, label: p.label ?? id, kind: p.kind })) } };
+    return { ...this.state, agents: { default: this.provider, list: Object.entries(this.providers.providers).filter(([, p]) => this.#available(p)).map(([id, p]) => ({ id, label: p.label ?? id, kind: p.kind })) } };
   }
 
   setAgent(id) {

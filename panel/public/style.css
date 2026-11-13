@@ -49,3 +49,7 @@ details input { margin: 8px 0 6px; }
 .row.wrap { flex-wrap: wrap; gap: 14px; font-size: 14px; }
 .legrow { align-items: baseline; }
 .legrow code { font-size: 12px; color: var(--muted); }
+
+.changes { margin: .25rem 0 .5rem; padding-left: 1.2rem; }
+.changes li { margin: .1rem 0; }
+.notes { border-left: 4px solid #c58a00; }

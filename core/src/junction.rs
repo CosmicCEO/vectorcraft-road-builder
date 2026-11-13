@@ -332,6 +332,11 @@ pub fn build(items: &[Item], spec: &Spec, out: &mut Out) -> Vec<String> {
                     let c = fr.at(pole_u, pole_v);
                     out.polygon(&format!("{base}.signal.road.{}", if sv < 0.0 { "f" } else { "b" }), &polygon(4, c, 0.8), flip, [0.15, 0.15, 0.17]);
                     out.polygon(&format!("{base}.signal.road.{}.lamp", if sv < 0.0 { "f" } else { "b" }), &polygon(8, c, 0.28), flip, [0.2, 0.85, 0.3]);
+                    // The primary head stands on the far side, at least 40 ft (12.2 m) beyond the stop line (MUTCD 4D.08); the head above is the supplemental near-side one.
+                    let beyond = crate::standards::SIGNAL_MIN_BEYOND_STOP_LINE.max((hw + gap + back) + hw + 1.0);
+                    let cf = fr.at(pole_u, pole_v - sv * beyond);
+                    out.polygon(&format!("{base}.signal.road.{}.far", if sv < 0.0 { "f" } else { "b" }), &polygon(4, cf, 0.8), flip, [0.15, 0.15, 0.17]);
+                    out.polygon(&format!("{base}.signal.road.{}.far.lamp", if sv < 0.0 { "f" } else { "b" }), &polygon(8, cf, 0.28), flip, [0.2, 0.85, 0.3]);
                 }
             }
             for (k, l) in legs.iter().enumerate() {
@@ -355,6 +360,10 @@ pub fn build(items: &[Item], spec: &Spec, out: &mut Out) -> Vec<String> {
                 } else {
                     out.polygon(&format!("{base}.signal.leg.{}", k + 1), &polygon(4, c, 0.8), flip, [0.15, 0.15, 0.17]);
                     out.polygon(&format!("{base}.signal.leg.{}.lamp", k + 1), &polygon(8, c, 0.28), flip, [0.2, 0.85, 0.3]);
+                    let beyond = crate::standards::SIGNAL_MIN_BEYOND_STOP_LINE.max((gap + back) + (main_right - main_left) + 1.0);
+                    let cf = fr.at(ub - l.su * beyond, pole_v);
+                    out.polygon(&format!("{base}.signal.leg.{}.far", k + 1), &polygon(4, cf, 0.8), flip, [0.15, 0.15, 0.17]);
+                    out.polygon(&format!("{base}.signal.leg.{}.far.lamp", k + 1), &polygon(8, cf, 0.28), flip, [0.2, 0.85, 0.3]);
                 }
             }
         }

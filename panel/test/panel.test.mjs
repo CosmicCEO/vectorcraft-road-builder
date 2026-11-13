@@ -260,14 +260,15 @@ test("an agent turns words into an intersection treatment", async () => {
   done();
 });
 
-test("a cloverleaf is previewed but not drawn yet, and says so", async () => {
+test("a cloverleaf is previewed with its changes and drawn", async () => {
   const vc = await fakeVectorCraft({ paths: [{ id: 2, name: "road.a" }, { id: 3, name: "road.b" }], selection: [2, 3], spec: roads2 });
   const { panel, done } = await setup(vc);
-  await panel.editCrossing({ treatment: "cloverleaf" });
-  assert.match(panel.snapshot().message, /not built yet/);
+  await panel.editCrossing({ treatment: "cloverleaf", over: "b" });
+  const p = panel.snapshot().pending;
+  assert.match(p.summary, /cloverleaf interchange/);
+  assert.deepEqual(p.changes, ["a new intersection"], "nothing was stored yet");
   await panel.draw();
-  assert.match(panel.snapshot().message, /not built yet/);
-  assert.equal(vc.doc.calls.filter((c) => c.command === SET_CROSSING).length, 0);
+  assert.equal(vc.doc.spec.crossings.k1.treatment, "cloverleaf");
   done();
 });
 
@@ -399,4 +400,50 @@ test("an agent turns words into a hub, and a click on its drawing selects its ro
   assert.deepEqual(s.target.ids.sort(), [2, 3, 4]);
   assert.equal(s.hub.described, true);
   two.done();
+});
+
+test("a proposal lists what it changes, in plain words, against what is stored", async () => {
+  const spec = { ...roads2, crossings: { k1: { roads: ["a", "b"], treatment: "signal", crosswalks: true, pocket: "left", pocket_length: 30 } } };
+  const vc = await fakeVectorCraft({ paths: [{ id: 2, name: "road.a" }, { id: 3, name: "road.b" }], selection: [2, 3], spec });
+  const { panel, done } = await setup(vc);
+  await panel.editCrossing({ pocket_length: 60, treatment: "roundabout" });
+  const c = panel.snapshot().pending.changes;
+  assert.ok(c.includes("pocket length: 30 → 60") && c.includes("type: signal → roundabout"), `${c}`);
+  done();
+  const vc2 = await fakeVectorCraft({ paths: [{ id: 2, name: "road.r1" }], selection: [2], spec: { segments: { r1: { cross_section: "lane back | lane fwd", anchor: "auto" } } } });
+  const two = await setup(vc2);
+  await two.panel.setText("bike-lane | lane back | lane fwd x2");
+  const ch = two.panel.snapshot().pending.changes;
+  assert.ok(ch.some((x) => /added bike lane/.test(x)), `${ch}`);
+  two.done();
+});
+
+test("an agent that cannot answer hands over to its fallback; an optional agent that is not installed is hidden", async () => {
+  const vc = await fakeVectorCraft({ paths: [{ id: 5, name: "" }], selection: [5] });
+  const control = new Control({ port: vc.port });
+  const providers = {
+    default: "small",
+    providers: {
+      small: { kind: "function", label: "Small", fallback: "big", fn: () => "nonsense-thing" },
+      big: { kind: "function", label: "Big", fn: () => "lane back | lane fwd" },
+      ghost: { kind: "cli", label: "Not installed", optional: true, command: "./target/no-such-agent" },
+    },
+  };
+  const panel = new Panel({ control, providers });
+  cleanups.push(() => { control.close(); vc.close(); });
+  await panel.tick();
+  assert.deepEqual(panel.snapshot().agents.list.map((a) => a.id), ["small", "big"], "the missing optional agent is not offered");
+  await panel.propose("two lane road", "small");
+  const s = panel.snapshot();
+  assert.equal(s.pending.canonical, "lane back | lane fwd");
+  assert.equal(s.pending.agent, "big");
+  assert.match(s.message, /Small could not give a valid answer, so Big answered/);
+});
+
+test("the notes the last build left with the document are shown", async () => {
+  const spec = { ...roads2, notes: ["intersection k1: no stub to trim: both roads run more than 25 m past the crossing"], crossings: { k1: { roads: ["a", "b"], treatment: "signal" } } };
+  const vc = await fakeVectorCraft({ paths: [{ id: 2, name: "road.a" }, { id: 3, name: "road.b" }], selection: [2, 3], spec });
+  const { panel, done } = await setup(vc);
+  assert.deepEqual(panel.snapshot().notes, ["intersection k1: no stub to trim: both roads run more than 25 m past the crossing"]);
+  done();
 });

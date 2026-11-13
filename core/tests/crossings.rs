@@ -118,6 +118,11 @@ fn crosswalks_stop_bars_and_signals_are_on_the_side_traffic_enters() {
     // The signal head for northbound traffic stands beside the bar on the east (driver's right) side.
     let c = centre(&pts(&out, "gen.crossing.k1.signal.a.before"));
     assert!((c[0] - 209.6).abs() < 0.2 && (c[1] - 410.02).abs() < 0.2, "{c:?}");
+    // The primary head for northbound traffic stands on the far (north) side: the bar is 9.12 m south of the middle, the head 13.72 m beyond it
+    // (the 12.2 m minimum, or past the far edge of the box if that is further), so 4.6 m north, at the same kerb.
+    let c = centre(&pts(&out, "gen.crossing.k1.signal.a.before.far"));
+    assert!((c[0] - 209.6).abs() < 0.2 && (c[1] - 395.4).abs() < 0.2, "{c:?}");
+    assert!((409.12 - c[1]) >= 12.2, "at least 40 ft beyond the stop line");
     // The crosswalk across the south arm of road a lies between the box and the bar.
     let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.crosswalk.a.before"));
     assert!((lo[1] - 404.6).abs() < 1e-3 && (hi[1] - 407.6).abs() < 1e-3, "{lo:?} {hi:?}");
