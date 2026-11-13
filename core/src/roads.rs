@@ -197,7 +197,7 @@ fn boundary(a: &Placed, b: &Placed) -> Option<Style> {
         return solid(CURB, 0.3);
     }
     match (ra, rb) {
-        (Buffer, _) | (_, Buffer) => solid(WHITE, 0.1),
+        (Buffer, _) | (_, Buffer) => solid(WHITE, crate::standards::MARKING_LINE_MIN),
         (Flush, x) | (x, Flush) if travelish(x) => solid(YELLOW, 0.12),
         (x, Bike) | (Bike, x) if travelish(x) => solid(WHITE, 0.15),
         (x, Edge) | (Edge, x) if travelish(x) => solid(WHITE, 0.15),

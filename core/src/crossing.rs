@@ -17,6 +17,7 @@ use crate::geom::{P, Poly, add, dot, scale, sub};
 use crate::junction::{polygon, travel};
 use crate::library::Role;
 use crate::offset::{MITRE_LIMIT, offset_polyline};
+use crate::standards::*;
 use crate::output::Out;
 use crate::roads::{CURB, Spec, WHITE, emit as emit_road, flip, heading, segment_id};
 use crate::vcdoc::Item;
@@ -163,8 +164,8 @@ pub struct CrossingSpec {
     /// Right-turn slip lanes with a triangular island at the corners, and their kerb radius.
     pub slip: bool,
     pub slip_radius: f64,
-    /// Median opening length along the divided road.
-    pub opening: f64,
+    /// Median opening length along the divided road. Left out, as long as the cross road is wide (a full opening is typically that wide).
+    pub opening: Option<f64>,
     /// Ramp acceleration or deceleration lane: full-width length and taper.
     pub accel_length: f64,
     pub accel_taper: f64,
@@ -235,7 +236,7 @@ impl CrossingSpec {
             pocket_taper: v["pocket_taper"].as_f64().unwrap_or(15.0).clamp(0.0, 60.0),
             slip: v["slip"].as_bool().unwrap_or(false),
             slip_radius: v["slip_radius"].as_f64().unwrap_or(15.0).clamp(8.0, 40.0),
-            opening: v["opening"].as_f64().unwrap_or(18.0).clamp(8.0, 40.0),
+            opening: v["opening"].as_f64().map(|o| o.clamp(8.0, 40.0)),
             accel_length: v["accel_length"].as_f64().unwrap_or(120.0).clamp(30.0, 400.0),
             accel_taper: v["accel_taper"].as_f64().unwrap_or(40.0).clamp(0.0, 150.0),
             beacon: v["beacon"].as_bool().unwrap_or(false),
@@ -262,7 +263,7 @@ impl CrossingSpec {
             Treatment::TwoWayStop => format!("two-way stop, {}", self.minor.as_ref().map_or("the narrower road stops".to_string(), |m| format!("road {m} stops"))),
             Treatment::FourWayStop => "four-way stop".to_string(),
             Treatment::Driveway => "driveway".to_string(),
-            Treatment::MedianOpening => format!("median opening, {} m long", self.opening),
+            Treatment::MedianOpening => self.opening.map_or("median opening".to_string(), |o| format!("median opening, {o} m long")),
             Treatment::OnRamp => format!("on-ramp with a {} m acceleration lane", self.accel_length),
             Treatment::OffRamp => format!("off-ramp with a {} m deceleration lane", self.accel_length),
             Treatment::MidblockCrossing => if self.beacon { "mid-block pedestrian crossing with flashing beacons" } else { "mid-block pedestrian crossing" }.to_string(),
@@ -754,7 +755,7 @@ pub(crate) struct Approach<'a> {
 }
 
 pub(crate) const GAP: f64 = 1.0;
-pub(crate) const CW: f64 = 3.0;
+pub(crate) const CW: f64 = CROSSWALK_DEPTH;
 const POCKET_WIDTH: f64 = 3.3;
 
 /// The marks on one arm: the median capped short of the crosswalk, a turn pocket, the crosswalk, the stop bar and the signal head or stop sign.
@@ -798,18 +799,18 @@ pub(crate) fn approach(out: &mut Out, ap: &Approach) -> Vec<String> {
 
     if ap.crosswalks {
         let centre = ext + GAP + CW / 2.0;
-        let stripes: Vec<Vec<P>> = (0..((arm.hi - arm.lo) / 1.2).floor() as usize)
-            .map(|i| { let u = arm.lo + 0.6 + 1.2 * i as f64; vec![at(centre - CW / 2.0, u), at(centre + CW / 2.0, u)] })
+        let stripes: Vec<Vec<P>> = (0..((arm.hi - arm.lo) / CROSSWALK_BAR_PITCH).floor() as usize)
+            .map(|i| { let u = arm.lo + CROSSWALK_BAR_PITCH / 2.0 + CROSSWALK_BAR_PITCH * i as f64; vec![at(centre - CW / 2.0, u), at(centre + CW / 2.0, u)] })
             .collect();
-        out.path(&format!("{}.crosswalk.{tag}", ap.base), &stripes, flip, WHITE, 0.5, false);
+        out.path(&format!("{}.crosswalk.{tag}", ap.base), &stripes, flip, WHITE, CROSSWALK_BAR_WIDTH, false);
     }
     if ap.ctl == Ctl::None {
         return notes;
     }
     let Some((lo, hi)) = lane_span else { return notes };
-    let back = if ap.crosswalks { CW + 0.9 } else { 0.6 };
+    let back = if ap.crosswalks { CW + STOP_LINE_SETBACK_MIN + STOP_LINE_WIDTH / 2.0 } else { 0.6 };
     let dist = ext + GAP + back;
-    out.path(&format!("{}.stop.{tag}", ap.base), &[vec![at(dist, lo), at(dist, hi)]], flip, WHITE, 0.6, false);
+    out.path(&format!("{}.stop.{tag}", ap.base), &[vec![at(dist, lo), at(dist, hi)]], flip, WHITE, STOP_LINE_WIDTH, false);
     // The signal head or sign stands just past the bar, beside the driver's right-hand kerb.
     let pole = if right_is_plus { hi + 0.9 } else { lo - 0.9 };
     let c = at(dist + 0.9, pole);
@@ -817,7 +818,8 @@ pub(crate) fn approach(out: &mut Out, ap: &Approach) -> Vec<String> {
         out.polygon(&format!("{}.signal.{tag}", ap.base), &polygon(4, c, 0.8), flip, [0.15, 0.15, 0.17]);
         out.polygon(&format!("{}.signal.{tag}.lamp", ap.base), &polygon(8, c, 0.28), flip, [0.2, 0.85, 0.3]);
     } else {
-        out.polygon(&format!("{}.sign.{tag}", ap.base), &polygon(8, c, 0.75), flip, [0.8, 0.12, 0.12]);
+        let radius = if lanes.len() >= 2 { STOP_SIGN_RADIUS_MULTI } else { STOP_SIGN_RADIUS_SINGLE };
+        out.polygon(&format!("{}.sign.{tag}", ap.base), &polygon(8, c, radius), flip, [0.8, 0.12, 0.12]);
     }
     notes
 }
@@ -864,13 +866,13 @@ fn pocket_strip(out: &mut Out, name: &str, at: &dyn Fn(f64, f64) -> P, ap: &Appr
     out.path(&format!("{name}.arrow"), &[vec![at(mid + 2.0, ec), at(mid, ec), at(tip.0, tip.1)], vec![wing(0.5), at(tip.0, tip.1), wing(-0.5)]], flip, WHITE, 0.2, false);
 }
 
-/// Dashes (3 m on, 3 m off) along a line at sideways offset `u` from distance `d0` to `d1`.
+/// A dotted lane line (3 ft on, 9 ft off) along a line at sideways offset `u` from distance `d0` to `d1`.
 pub(crate) fn simplify_dashes(at: &dyn Fn(f64, f64) -> P, u: f64, d0: f64, d1: f64) -> Vec<Vec<P>> {
     let mut dashes = Vec::new();
     let mut d = d0;
     while d < d1 {
-        dashes.push(vec![at(d, u), at((d + 3.0).min(d1), u)]);
-        d += 6.0;
+        dashes.push(vec![at(d, u), at((d + DOTTED_LANE_ON).min(d1), u)]);
+        d += DOTTED_LANE_ON + DOTTED_LANE_OFF;
     }
     dashes
 }
@@ -906,6 +908,15 @@ fn slip_corner(out: &mut Out, base: &str, k: usize, c: P, d1: P, d2: P, radius: 
     out.polygon(&format!("{base}.island.{}", k + 1), &island, flip, GRASS);
     out.path(&format!("{base}.island.{}.kerb", k + 1), &[island], flip, CURB, 0.25, true);
     true
+}
+
+/// A yield line: a row of white isosceles triangles across the sideways span `lo`..`hi` whose bases lie `d` along, pointing toward the approaching
+/// traffic (`toward` is +1 if that is the +along direction, else -1).
+pub(crate) fn yield_triangles(at: &dyn Fn(f64, f64) -> P, lo: f64, hi: f64, d: f64, toward: f64) -> Vec<Vec<P>> {
+    let pitch = YIELD_TRIANGLE_BASE + YIELD_TRIANGLE_SPACE;
+    let n = (((hi - lo) + YIELD_TRIANGLE_SPACE) / pitch).floor().max(1.0) as usize;
+    let start = lo + ((hi - lo) - (n as f64 * pitch - YIELD_TRIANGLE_SPACE)) / 2.0;
+    (0..n).map(|i| { let u = start + i as f64 * pitch; vec![at(d, u), at(d, u + YIELD_TRIANGLE_BASE), at(d + toward * YIELD_TRIANGLE_HEIGHT, u + YIELD_TRIANGLE_BASE / 2.0)] }).collect()
 }
 
 /// Signals, stop signs or nothing: pave the overlap, round the corners, mark all four approaches. Returns notes.
@@ -1040,11 +1051,10 @@ fn roundabout(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: 
             let lanes: Vec<&Placed> = arm.placed.iter().filter(|e| travel(e) && e.dir == Some(want)).collect();
             if !lanes.is_empty() {
                 let (lo, hi) = (lanes.iter().map(|e| e.left).fold(f64::INFINITY, f64::min), lanes.iter().map(|e| e.right).fold(f64::NEG_INFINITY, f64::max));
-                let dashes: Vec<Vec<P>> = (0..((hi - lo) / 0.9).floor() as usize).map(|i| { let u = lo + 0.2 + 0.9 * i as f64; vec![at(r_out + 0.8, u), at(r_out + 0.8, u + 0.5)] }).collect();
-                out.path(&format!("{base}.yield.{tag}"), &dashes, flip, WHITE, 0.5, false);
+                out.fills(&format!("{base}.yield.{tag}"), &yield_triangles(&at, lo, hi, r_out + 0.8, 1.0), flip, WHITE);
             }
             if cs.crosswalks {
-                let c = r_out + 7.5;
+                let c = r_out + ROUNDABOUT_CROSSWALK_SETBACK + cw / 2.0;
                 let stripes: Vec<Vec<P>> = (0..((arm.hi - arm.lo) / 1.2).floor() as usize).map(|i| { let u = arm.lo + 0.6 + 1.2 * i as f64; vec![at(c - cw / 2.0, u), at(c + cw / 2.0, u)] }).collect();
                 out.path(&format!("{base}.crosswalk.{tag}"), &stripes, flip, WHITE, 0.5, false);
             }

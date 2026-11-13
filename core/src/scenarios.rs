@@ -1,12 +1,13 @@
 //! The crossing treatments that are not a plain paved box: median opening, ramps (speed-change lane), mid-block crossing, railroad, cloverleaf.
 //! Each draws into the same `gen.crossing.<id>.*` names as the other treatments. Shapes are typical, not surveyed.
 
-use crate::crossing::{Arm, CW, Crossing, CrossingSpec, GRASS, PAVEMENT, Treatment, cap_medians, corner_at, cross2, main_index, overpass, simplify_dashes, unit};
+use crate::crossing::{Arm, CW, Crossing, CrossingSpec, GRASS, PAVEMENT, Treatment, cap_medians, yield_triangles, corner_at, cross2, main_index, overpass, simplify_dashes, unit};
 use crate::geom::{P, add, dot, scale, sub};
 use crate::junction::{polygon, travel};
 use crate::crosssection::{Dir, Placed};
 use crate::library::Role;
 use crate::output::Out;
+use crate::standards::*;
 use crate::roads::{CURB, WHITE, flip};
 
 const DARK: [f64; 3] = [0.2, 0.2, 0.22];
@@ -46,9 +47,12 @@ fn median_opening(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, ar
     if medians(&m.placed).is_empty() {
         return Err(format!("road {} has no median to open: give it a median or margin (for example \"lane back | median 4 | lane fwd\")", m.id));
     }
+    // A full median opening is typically as long as the road crossing it is wide.
+    let cross = &arms[1 - main_index(cs, arms)];
+    let opening = cs.opening.unwrap_or(cross.hi - cross.lo).clamp(8.0, 40.0);
     for sign in [-1.0, 1.0] {
         let at = frame(x.p, scale(m.t, sign), m.n);
-        cap_medians(out, &format!("{base}.opening.{}", if sign < 0.0 { "before" } else { "after" }), &m.placed, 0.0, cs.opening / 2.0, &at);
+        cap_medians(out, &format!("{base}.opening.{}", if sign < 0.0 { "before" } else { "after" }), &m.placed, 0.0, opening / 2.0, &at);
     }
     Ok(vec![])
 }
@@ -73,8 +77,9 @@ fn midblock(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: &[
     out.path(&format!("{base}.crosswalk"), &stripes, flip, WHITE, 0.5, false);
     for (sign, dir, tag) in [(-1.0, Dir::Fwd, "before"), (1.0, Dir::Back, "after")] {
         if let Some((lo, hi)) = lane_span(&m.placed, dir) {
-            let d = sign * (CW / 2.0 + 4.5);
-            out.path(&format!("{base}.stop.{tag}"), &[vec![at(d, lo), at(d, hi)]], flip, WHITE, 0.6, false);
+            // An uncontrolled crossing gets a yield line (triangles pointing at the approaching traffic), 20 to 50 ft before the crosswalk.
+            let d = sign * (CW / 2.0 + MIDBLOCK_YIELD_SETBACK);
+            out.fills(&format!("{base}.yield.{tag}"), &yield_triangles(&at, lo, hi, d, sign), flip, WHITE);
         }
     }
     if cs.beacon {
@@ -110,7 +115,7 @@ fn railroad(out: &mut Out, base: &str, cs: &CrossingSpec, x: &Crossing, arms: &[
     let at = frame(x.p, m.t, m.n);
     for (sign, dir, tag) in [(-1.0, Dir::Fwd, "before"), (1.0, Dir::Back, "after")] {
         let Some((lo, hi)) = lane_span(&m.placed, dir) else { continue };
-        let stop = sign * (clear + 4.6);
+        let stop = sign * (clear + 4.6_f64.max(RAIL_STOP_LINE_MIN));
         out.path(&format!("{base}.stop.{tag}"), &[vec![at(stop, lo), at(stop, hi)]], flip, WHITE, 0.6, false);
         // The pole stands at the driver's right-hand kerb, between the stop line and the track.
         let heading_in = scale(m.t, -sign);

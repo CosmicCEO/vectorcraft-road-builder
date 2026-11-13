@@ -1,0 +1,2000 @@
+{
+ "version": 1,
+ "generated": "2026-11-12",
+ "title": "Road design and dimension standards used by Road Builder",
+ "note": "Every entry names its source and section. status: verified = read in the primary text; verified-secondary = read in a state design manual that applies or reproduces a federal guide (the primary was not available); unverified = from general knowledge or not found, do not present as a standard. Values are the standard's own units (us) with a metric conversion (si, metres or metres per second). The code field records how the plug-in's own constant compares (conforms true, false or null when not comparable). Widths in the plug-in's library are typical values, not surveyed ones.",
+ "sources": {
+  "mutcd": {
+   "title": "Manual on Uniform Traffic Control Devices for Streets and Highways, 11th Edition (December 2023) with Revision 1 incorporated (December 2025)",
+   "publisher": "US DOT Federal Highway Administration",
+   "kind": "federal-standard",
+   "url": "https://mutcd.fhwa.dot.gov/kno_11th_Editionr1.htm",
+   "file": "https://mutcd.fhwa.dot.gov/pdfs/11th_Editionr1/mutcd11theditionr1hl.pdf",
+   "file_sha256": "f508594285e5fccc45714660cc6aba1f895ae88226449345582fbbc1ceb7ba07",
+   "pages": 1162,
+   "copyright": "US Government work, public domain",
+   "retrieved": "2026-11-12",
+   "note": "Official current edition. Quotes are verbatim from the PDF text; page numbers are the MUTCD's own."
+  },
+  "prowag": {
+   "title": "Accessibility Guidelines for Pedestrian Facilities in the Public Right-of-Way (PROWAG), Chapter R3 Technical Requirements",
+   "publisher": "US Access Board (36 CFR Part 1190)",
+   "kind": "federal-standard",
+   "url": "https://www.access-board.gov/prowag/technical.html",
+   "file_sha256": "f0f32edf4a56c29781beef2a4c66055e698ac7dff17cf953360035023c90b1ea",
+   "copyright": "US Government work, public domain",
+   "retrieved": "2026-11-12",
+   "note": "Web edition of the technical requirements."
+  },
+  "fdot212": {
+   "title": "FDOT Design Manual, Chapter 212 Intersections (topic 625-000-002, January 1, 2018)",
+   "publisher": "Florida Department of Transportation",
+   "kind": "state-manual",
+   "url": "https://www.fdot.gov/docs/default-source/roadway/FDM/current/2018FDM212Intersections.pdf",
+   "file_sha256": "a3eef8609c10d70e98d53f127e8196d784b794c82df515a5ac3a2c93f3785b54",
+   "copyright": "State agency publication, freely published",
+   "retrieved": "2026-11-12",
+   "note": "A state manual (not federal). Used for the numbers the MUTCD leaves to design guides. The 2018 edition is old; check the current FDM before relying on a value."
+  },
+  "scdot_rbt": {
+   "title": "SCDOT Roundabout Design Criteria (Figure 9.7-A to D)",
+   "publisher": "South Carolina Department of Transportation",
+   "kind": "state-manual",
+   "url": "https://www.scdot.org/business/pdf/I85/RoadwayDesign/Roundabout_Criteria.pdf",
+   "file_sha256": "3e031509dfb1c7f698485a7b2d4ebed4f2db8dcd8b467e9a67f17015a86e3c9f",
+   "copyright": "State agency publication, freely published",
+   "retrieved": "2026-11-12",
+   "note": "States that it follows NCHRP Report 672 (Roundabouts: An Informational Guide, 2nd ed.); the primary text could not be read (see sources_blocked)."
+  },
+  "wisdot_1126": {
+   "title": "WisDOT Facilities Development Manual 11-26 Roundabouts",
+   "publisher": "Wisconsin Department of Transportation",
+   "kind": "state-manual",
+   "url": "https://wisconsindot.gov/rdwy/fdm/fd-11-26.pdf",
+   "file_sha256": "969e5c1c13da3bffec441c9e6b0a52cae8a62b5f2336a656a0659281e40cea2c",
+   "copyright": "State agency publication, freely published",
+   "retrieved": "2026-11-12",
+   "note": "Cites NCHRP Report 1043 (2023) for its Table 8.1."
+  }
+ },
+ "sources_blocked": [
+  {
+   "what": "FHWA Roundabouts: An Informational Guide (FHWA-SA-10-006) and the 2013 FHWA Signalized Intersections Informational Guide (FHWA-SA-13-027)",
+   "tried": "safety.fhwa.dot.gov and highways.dot.gov return HTTP 403 to automated downloads; nap.nationalacademies.org chapter pages serve page images with no text; onlinepubs.trb.org returned an HTML page instead of the PDF",
+   "action": "Not worked around. Download by hand and drop the PDFs in a scratch folder, then add entries citing the section numbers."
+  },
+  {
+   "what": "AASHTO A Policy on Geometric Design of Highways and Streets (Green Book), Guide for the Development of Bicycle Facilities, Roadside Design Guide",
+   "tried": "not fetched: copyrighted and sold by AASHTO",
+   "action": "Cite by name and section only if the owner supplies a licensed copy. Values attributed to the Green Book elsewhere (lane width, kerb radius) stay unverified here."
+  },
+  {
+   "what": "NTSB",
+   "tried": "https://www.ntsb.gov/about/Pages/default.aspx",
+   "action": "The NTSB investigates accidents, studies safety and recommends changes; its mission page does not describe design standards. Its highway reports cite the MUTCD and AASHTO for the standards. Individual reports can be cited as case evidence, not as a source of dimensions."
+  }
+ ],
+ "entries": [
+  {
+   "id": "line.normal-width",
+   "topic": "markings",
+   "title": "Normal longitudinal line width",
+   "applies_to": [
+    "all"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "3A.04 para 02A",
+   "status": "verified",
+   "values": [
+    {
+     "name": "width",
+     "min_us": 4,
+     "min_si": 0.1016,
+     "unit_us": "in",
+     "unit_si": "m",
+     "max_us": 6,
+     "max_si": 0.1524
+    }
+   ],
+   "quote": "Normal line—4 to 6 inches wide.",
+   "code": [
+    {
+     "name": "lane/edge/centre line stroke widths (roads.rs boundary(): 0.10 to 0.15 m)",
+     "value_si": 0.12,
+     "conforms": true,
+     "note": "The thinnest marking line is now MARKING_LINE_MIN = 0.11 m (4.3 in): the buffer line was 0.10 m (3.9 in) and is fixed. Lane and centre lines are 0.12 m (4.7 in), bike and edge lines 0.15 m (5.9 in)."
+    }
+   ]
+  },
+  {
+   "id": "line.wide-width",
+   "topic": "markings",
+   "title": "Wide line",
+   "applies_to": [
+    "all"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "3A.04 para 02B",
+   "status": "verified",
+   "values": [
+    {
+     "name": "width",
+     "text": "at least twice the width of a normal line"
+    }
+   ],
+   "quote": "Wide line—at least twice the width of a normal line."
+  },
+  {
+   "id": "line.double-spacing",
+   "topic": "markings",
+   "title": "Double line space",
+   "applies_to": [
+    "all"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3A.04 para 03",
+   "status": "verified",
+   "values": [
+    {
+     "name": "space between lines",
+     "text": "not more than 2 x the width of a single line"
+    }
+   ],
+   "quote": "the discernible space separating the parallel lines of a double line should not exceed two times the line width of a single line.",
+   "code": [
+    {
+     "name": "double yellow: 0.3 m between line centres, 0.12 m lines",
+     "value_si": 0.18,
+     "conforms": true,
+     "note": "Space between the lines is 0.18 m, under the 0.24 m limit."
+    }
+   ]
+  },
+  {
+   "id": "line.broken-pattern",
+   "topic": "markings",
+   "title": "Broken line segment and gap",
+   "applies_to": [
+    "all"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3A.04 para 06",
+   "status": "verified",
+   "values": [
+    {
+     "name": "segment",
+     "us": 10,
+     "unit_us": "ft",
+     "si": 3.048,
+     "unit_si": "m"
+    },
+    {
+     "name": "gap",
+     "us": 30,
+     "unit_us": "ft",
+     "si": 9.144,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "Broken lines should consist of 10-foot line segments and 30-foot gaps, or dimensions in a similar ratio of line segments to gaps as appropriate for traffic speeds and the need for delineation.",
+   "code": [
+    {
+     "name": "lane line dash 3.0 m on, 9.0 m off (roads.rs boundary())",
+     "value_si": 3.0,
+     "conforms": true,
+     "note": "9.8 ft / 29.5 ft: the 1:3 ratio of the standard."
+    }
+   ]
+  },
+  {
+   "id": "line.dotted-lane",
+   "topic": "markings",
+   "title": "Dotted lane line",
+   "applies_to": [
+    "ramp",
+    "turn pocket"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3A.04 para 07",
+   "status": "verified",
+   "values": [
+    {
+     "name": "segment",
+     "us": 3,
+     "unit_us": "ft",
+     "si": 0.9144,
+     "unit_si": "m"
+    },
+    {
+     "name": "gap",
+     "us": 9,
+     "unit_us": "ft",
+     "si": 2.7432,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "A dotted line used as a lane line (see Section 3B.07) should consist of 3-foot line segments and 9-foot gaps.",
+   "code": [
+    {
+     "name": "dotted lane line beside pockets and speed-change lanes: 0.914 m on, 2.743 m off (standards.rs)",
+     "value_si": 3.0,
+     "conforms": true,
+     "note": "Fixed: DOTTED_LANE_ON/OFF are 0.914 m / 2.743 m (3 ft / 9 ft)."
+    }
+   ]
+  },
+  {
+   "id": "line.dotted-extension",
+   "topic": "markings",
+   "title": "Dotted line extension through an intersection, taper or ramp area",
+   "applies_to": [
+    "intersection",
+    "ramp"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3A.04 para 07",
+   "status": "verified",
+   "values": [
+    {
+     "name": "segment",
+     "us": 2,
+     "unit_us": "ft",
+     "si": 0.6096,
+     "unit_si": "m"
+    },
+    {
+     "name": "gap",
+     "min_us": 2,
+     "min_si": 0.6096,
+     "unit_us": "ft",
+     "unit_si": "m",
+     "max_us": 6,
+     "max_si": 1.8288
+    }
+   ],
+   "quote": "A dotted line for line extensions within an intersection, taper area, or interchange ramp area (see Section 3B.11) should consist of 2-foot line segments and 2-foot to 6-foot gaps."
+  },
+  {
+   "id": "line.tcwl",
+   "topic": "markings",
+   "title": "Two-way left-turn lane markings",
+   "applies_to": [
+    "median",
+    "turn pocket"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "3B.05 para 01",
+   "status": "verified",
+   "values": [
+    {
+     "name": "pattern",
+     "text": "normal width broken yellow line toward the lane and normal width solid yellow line toward the adjacent traffic lane, each side"
+    }
+   ],
+   "quote": "the lane line pavement markings on each side of the two-way left-turn lane shall consist of a normal width broken yellow line and a normal width solid yellow line"
+  },
+  {
+   "id": "line.nopass-sight",
+   "topic": "markings",
+   "title": "Minimum passing sight distance for no-passing zones (Table 3B-1)",
+   "applies_to": [
+    "roads"
+   ],
+   "kind": "table",
+   "source": "mutcd",
+   "section": "Table 3B-1",
+   "status": "verified",
+   "values": [
+    {
+     "name": "speed to passing sight distance",
+     "table_us": {
+      "25 mph": "450 ft",
+      "30 mph": "500 ft",
+      "35 mph": "550 ft",
+      "40 mph": "600 ft",
+      "45 mph": "700 ft",
+      "50 mph": "800 ft",
+      "55 mph": "900 ft",
+      "60 mph": "1000 ft",
+      "65 mph": "1100 ft",
+      "70 mph": "1200 ft"
+     }
+    }
+   ],
+   "quote": "Table 3B-1. Minimum Passing Sight Distances for No-Passing Zone Markings"
+  },
+  {
+   "id": "taper.lane-reduction",
+   "topic": "geometry",
+   "title": "Lane-reduction transition taper length",
+   "applies_to": [
+    "turn pocket",
+    "ramp"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3B.12 para 08-10",
+   "status": "verified",
+   "values": [
+    {
+     "name": "speed limit 45 mph or more",
+     "formula": "L = W x S (L taper ft, W offset ft, S speed mph)"
+    },
+    {
+     "name": "speed limit under 45 mph",
+     "formula": "L = W x S^2 / 60"
+    },
+    {
+     "name": "minimum taper, urban",
+     "us": 100,
+     "unit_us": "ft",
+     "si": 30.48,
+     "unit_si": "m"
+    },
+    {
+     "name": "minimum taper, rural",
+     "us": 200,
+     "unit_us": "ft",
+     "si": 60.96,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "the transition taper length for a lane-reduction transition should be computed by the formula L = WS, where L equals the taper length in feet, W equals the width of the offset distance in feet, and S equals the 85th-percentile speed or the speed limit in mph, whichever is higher.",
+   "code": [
+    {
+     "name": "pocket_taper default",
+     "value_si": 15.0,
+     "conforms": null,
+     "note": "15 m is 49 ft: equals FDOT's 50 ft approach-end taper for one turn lane; the MUTCD formula gives 12 ft x 35 mph^2/60 = 245 ft for a 12 ft shift at 35 mph, which is for lane reductions, not turn-lane approach tapers."
+    }
+   ]
+  },
+  {
+   "id": "taper.approach-obstruction",
+   "topic": "geometry",
+   "title": "Approach markings for obstructions: taper",
+   "applies_to": [
+    "median",
+    "island"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3B.13 para 02-03",
+   "status": "verified",
+   "values": [
+    {
+     "name": "45 mph or more",
+     "formula": "L = W x S"
+    },
+    {
+     "name": "under 45 mph",
+     "formula": "L = W x S^2 / 60"
+    },
+    {
+     "name": "minimum taper, urban",
+     "us": 100,
+     "unit_us": "ft",
+     "si": 30.48,
+     "unit_si": "m"
+    },
+    {
+     "name": "minimum taper, rural",
+     "us": 200,
+     "unit_us": "ft",
+     "si": 60.96,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "For roadways having a speed limit of 45 mph or greater, the taper length of the tapered line markings should be computed by the formula L = WS"
+  },
+  {
+   "id": "buffer.bike",
+   "topic": "bicycle",
+   "title": "Buffer-separated bicycle lane buffer",
+   "applies_to": [
+    "bike lane"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "9E.06 para 08-14",
+   "status": "verified",
+   "values": [
+    {
+     "name": "buffer width",
+     "text": "at least 3 x the line width of the lines that mark it"
+    },
+    {
+     "name": "2 to 3 ft wide: chevron or diagonal markings should be applied",
+     "min_us": 2,
+     "min_si": 0.6096,
+     "unit_us": "ft",
+     "unit_si": "m",
+     "max_us": 3,
+     "max_si": 0.9144
+    },
+    {
+     "name": "more than 3 ft wide: chevron or diagonal markings shall be applied",
+     "us": 3,
+     "unit_us": "ft",
+     "si": 0.9144,
+     "unit_si": "m"
+    },
+    {
+     "name": "chevron or diagonal spacing",
+     "us": 10,
+     "unit_us": "ft",
+     "si": 3.048,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "Where a buffer space is more than 3 feet wide, chevron or diagonal markings shall be applied within the buffer space.",
+   "code": [
+    {
+     "name": "bike-buffer element width 0.9 m (3.0 ft)",
+     "value_si": 0.9,
+     "conforms": true,
+     "note": "Exactly 3 ft: diagonal markings are 'should' at 2 to 3 ft and 'shall' above 3 ft. The plug-in draws no diagonals yet."
+    }
+   ]
+  },
+  {
+   "id": "bicycle.lane-width",
+   "topic": "bicycle",
+   "title": "Bicycle lane width",
+   "applies_to": [
+    "bike lane"
+   ],
+   "kind": "gap",
+   "source": "mutcd",
+   "section": "9E.01",
+   "status": "unverified",
+   "values": [
+    {
+     "name": "width",
+     "text": "the MUTCD sets no width: 9E.01 only requires longitudinal lines plus symbol or word markings"
+    }
+   ],
+   "quote": "Longitudinal pavement markings and bicycle lane symbol or word markings (see Figure 9E-1) shall be used to define bicycle lanes.",
+   "code": [
+    {
+     "name": "bike-lane element 1.5 m (4.9 ft)",
+     "value_si": 1.5,
+     "conforms": null,
+     "note": "Width comes from the AASHTO bike guide (copyrighted) or the FHWA Bikeway Selection Guide: not retrieved."
+    }
+   ]
+  },
+  {
+   "id": "stop-line.width",
+   "topic": "markings",
+   "title": "Stop line width",
+   "applies_to": [
+    "signal",
+    "stop sign"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3B.19 para 05",
+   "status": "verified",
+   "values": [
+    {
+     "name": "width",
+     "min_us": 12,
+     "min_si": 0.3048,
+     "unit_us": "in",
+     "unit_si": "m",
+     "max_us": 24,
+     "max_si": 0.6096
+    }
+   ],
+   "quote": "Stop lines should be 12 to 24 inches wide.",
+   "code": [
+    {
+     "name": "stop bar stroke 0.6 m (crossing.rs approach())",
+     "value_si": 0.6,
+     "conforms": true,
+     "note": "23.6 in: within range, at the top."
+    }
+   ]
+  },
+  {
+   "id": "stop-line.setback",
+   "topic": "markings",
+   "title": "Stop and yield line setback from the crosswalk",
+   "applies_to": [
+    "signal",
+    "stop sign"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3B.19 para 13",
+   "status": "verified",
+   "values": [
+    {
+     "name": "minimum in advance of the nearest crosswalk line",
+     "us": 4,
+     "unit_us": "ft",
+     "si": 1.2192,
+     "unit_si": "m"
+    },
+    {
+     "name": "no marked crosswalk: distance from the nearest edge of the intersecting traveled way",
+     "min_us": 4,
+     "min_si": 1.2192,
+     "unit_us": "ft",
+     "unit_si": "m",
+     "max_us": 30,
+     "max_si": 9.144
+    }
+   ],
+   "quote": "stop and yield lines should be placed a minimum of 4 feet in advance of the nearest crosswalk line at controlled intersections",
+   "code": [
+    {
+     "name": "stop bar: near edge STOP_LINE_SETBACK_MIN (1.22 m) beyond the crosswalk",
+     "value_si": 0.9,
+     "conforms": true,
+     "note": "Fixed: the bar now stands CW + 1.22 m + half its width (4.52 m) beyond the box edge plus the 1 m gap, so its near edge is 4 ft (1.22 m) past the crosswalk. Without a crosswalk the bar is 1.6 m from the box edge (5.2 ft): within 4 to 30 ft."
+    }
+   ]
+  },
+  {
+   "id": "stop-line.must-not-yield",
+   "topic": "markings",
+   "title": "Stop lines are not used where drivers yield",
+   "applies_to": [
+    "roundabout",
+    "midblock crossing"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "3B.19 para 03, 09",
+   "status": "verified",
+   "values": [
+    {
+     "name": "rule",
+     "text": "stop lines shall not be used at YIELD signs or uncontrolled approaches; yield lines shall not be used where drivers must stop"
+    }
+   ],
+   "quote": "Yield lines shall not be used at locations where drivers are required to stop in compliance with a STOP (R1-1) sign, a Stop Here for Pedestrians (R1-5b) sign, a Stop Here for School Crossing (R1-5c) sign, a Stop Here for Trail Crossing (R1-5e) sign, a traffic control signal, or some other traffic control device.",
+   "code": [
+    {
+     "name": "mid-block crossing draws a yield line of triangles (scenarios.rs midblock())",
+     "value_si": 0.6,
+     "conforms": true,
+     "note": "Fixed: an uncontrolled mid-block crossing now draws a yield line of triangles. A signal- or hybrid-beacon-controlled crossing would use a stop line (not modelled)."
+    }
+   ]
+  },
+  {
+   "id": "yield-line.triangles",
+   "topic": "markings",
+   "title": "Yield line triangles",
+   "applies_to": [
+    "roundabout",
+    "midblock crossing"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3B.19 para 10, 12",
+   "status": "verified",
+   "values": [
+    {
+     "name": "triangle base",
+     "min_us": 12,
+     "min_si": 0.3048,
+     "unit_us": "in",
+     "unit_si": "m",
+     "max_us": 24,
+     "max_si": 0.6096
+    },
+    {
+     "name": "triangle height",
+     "text": "1.5 x the base"
+    },
+    {
+     "name": "space between triangles",
+     "min_us": 3,
+     "min_si": 0.0762,
+     "unit_us": "in",
+     "unit_si": "m",
+     "max_us": 12,
+     "max_si": 0.3048
+    }
+   ],
+   "quote": "The individual triangles comprising the yield line should have a base of 12 to 24 inches wide and a height equal to 1.5 times the base. The space between the triangles should be 3 to 12 inches.",
+   "code": [
+    {
+     "name": "roundabout yield line: row of triangles (crossing.rs roundabout())",
+     "value_si": 0.5,
+     "conforms": true,
+     "note": "Fixed: drawn as isosceles triangles (0.45 m base, 0.675 m high, 0.15 m apart) pointing at approaching traffic."
+    }
+   ]
+  },
+  {
+   "id": "stop-line.uncontrolled-multilane",
+   "topic": "markings",
+   "title": "Stop or yield line before a crosswalk across an uncontrolled multi-lane approach",
+   "applies_to": [
+    "midblock crossing"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3B.19 para 14-16",
+   "status": "verified",
+   "values": [
+    {
+     "name": "distance in advance of the nearest crosswalk line",
+     "min_us": 20,
+     "min_si": 6.096,
+     "unit_us": "ft",
+     "unit_si": "m",
+     "max_us": 50,
+     "max_si": 15.24
+    }
+   ],
+   "quote": "the yield (stop) line should be placed 20 to 50 feet in advance of the nearest crosswalk line (see Drawing B in Figure 3B-16).",
+   "code": [
+    {
+     "name": "mid-block yield line 6.2 m before the crosswalk edge",
+     "value_si": 4.5,
+     "conforms": true,
+     "note": "Fixed: MIDBLOCK_YIELD_SETBACK = 6.2 m (20.3 ft), inside 20 to 50 ft."
+    }
+   ]
+  },
+  {
+   "id": "crosswalk.transverse-width",
+   "topic": "markings",
+   "title": "Transverse crosswalk line width",
+   "applies_to": [
+    "crosswalk"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "3C.03 para 03",
+   "status": "verified",
+   "values": [
+    {
+     "name": "width",
+     "min_us": 6,
+     "min_si": 0.1524,
+     "unit_us": "in",
+     "unit_si": "m",
+     "max_us": 24,
+     "max_si": 0.6096
+    }
+   ],
+   "quote": "When used, transverse lines shall not be less than 6 inches or greater than 24 inches in width."
+  },
+  {
+   "id": "crosswalk.min-width",
+   "topic": "markings",
+   "title": "Minimum width of a marked crosswalk",
+   "applies_to": [
+    "crosswalk"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "3C.03 para 05-06",
+   "status": "verified",
+   "values": [
+    {
+     "name": "minimum width",
+     "us": 6,
+     "unit_us": "ft",
+     "si": 1.8288,
+     "unit_si": "m"
+    },
+    {
+     "name": "minimum width at a non-intersection crosswalk where the posted speed is 40 mph or more",
+     "us": 8,
+     "unit_us": "ft",
+     "si": 2.4384,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "Except as provided in Paragraph 6 of this Section, the minimum width of a marked crosswalk shall be 6 feet.",
+   "code": [
+    {
+     "name": "crosswalk depth CW = 3.0 m (crossing.rs)",
+     "value_si": 3.0,
+     "conforms": true,
+     "note": "9.8 ft."
+    }
+   ]
+  },
+  {
+   "id": "crosswalk.longitudinal-bars",
+   "topic": "markings",
+   "title": "Longitudinal bar crosswalk",
+   "applies_to": [
+    "crosswalk"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "3C.06 para 02-03; 3C.05 para 04",
+   "status": "verified",
+   "values": [
+    {
+     "name": "bar width",
+     "min_us": 12,
+     "min_si": 0.3048,
+     "unit_us": "in",
+     "unit_si": "m",
+     "max_us": 24,
+     "max_si": 0.6096
+    },
+    {
+     "name": "lateral spacing between bars",
+     "min_us": 12,
+     "min_si": 0.3048,
+     "unit_us": "in",
+     "unit_si": "m",
+     "max_us": 60,
+     "max_si": 1.524
+    },
+    {
+     "name": "spacing limit",
+     "text": "not more than 2.5 x the bar width"
+    },
+    {
+     "name": "minimum number of bars",
+     "us": 3
+    }
+   ],
+   "quote": "The lateral spacing between subsequent longitudinal bars shall not be less than 12 inches or greater than 60 inches. The lateral spacing of the longitudinal bars shall not exceed 2.5 times the width of a longitudinal bar.",
+   "code": [
+    {
+     "name": "bars 0.5 m wide every 1.2 m centre to centre (0.7 m gap)",
+     "value_si": 0.5,
+     "conforms": true,
+     "note": "Bar 19.7 in; space 27.6 in = 1.4 x the bar width: within all limits."
+    }
+   ]
+  },
+  {
+   "id": "crosswalk.bar-pair",
+   "topic": "markings",
+   "title": "Bar pair crosswalk",
+   "applies_to": [
+    "crosswalk"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "3C.08 para 03-05",
+   "status": "verified",
+   "values": [
+    {
+     "name": "width of each bar",
+     "min_us": 8,
+     "min_si": 0.2032,
+     "unit_us": "in",
+     "unit_si": "m",
+     "max_us": 12,
+     "max_si": 0.3048
+    },
+    {
+     "name": "spacing between bar pairs",
+     "min_us": 24,
+     "min_si": 0.6096,
+     "unit_us": "in",
+     "unit_si": "m",
+     "max_us": 60,
+     "max_si": 1.524
+    }
+   ],
+   "quote": "The width of an individual longitudinal bar that establishes one-half of the bar pair shall not be less than 8 inches or greater than 12 inches."
+  },
+  {
+   "id": "crosswalk.bars-parallel",
+   "topic": "markings",
+   "title": "High-visibility bars lie parallel to approaching traffic",
+   "applies_to": [
+    "crosswalk"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3C.05 para 07",
+   "status": "verified",
+   "values": [
+    {
+     "name": "rule",
+     "text": "bars angled parallel to the travel path of approaching traffic"
+    }
+   ],
+   "quote": "The individual longitudinal elements of a high-visibility crosswalk should be angled such that they are parallel to the travel path of approaching traffic."
+  },
+  {
+   "id": "crosswalk.roundabout-setback",
+   "topic": "markings",
+   "title": "Crosswalks at roundabouts",
+   "applies_to": [
+    "roundabout"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "3C.09 para 01-03",
+   "status": "verified",
+   "values": [
+    {
+     "name": "minimum distance from the edge of the circulatory roadway at a yield-controlled approach and an uncontrolled exit",
+     "us": 20,
+     "unit_us": "ft",
+     "si": 6.096,
+     "unit_si": "m"
+    },
+    {
+     "name": "central island",
+     "text": "no crosswalk to or from the central island"
+    }
+   ],
+   "quote": "On an approach to a circular intersection controlled by a YIELD sign and at uncontrolled exits, crosswalks should be a minimum of 20 feet from the edge of the circulatory roadway.",
+   "code": [
+    {
+     "name": "roundabout crosswalk nearest edge 6.2 m from the ring",
+     "value_si": 6.0,
+     "conforms": true,
+     "note": "Fixed: ROUNDABOUT_CROSSWALK_SETBACK = 6.2 m (20.3 ft)."
+    }
+   ]
+  },
+  {
+   "id": "crosswalk.curb-ramps",
+   "topic": "markings",
+   "title": "Curb ramps lie within the crosswalk extension",
+   "applies_to": [
+    "crosswalk"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "3C.03 para 09",
+   "status": "verified",
+   "values": [
+    {
+     "name": "rule",
+     "text": "where curb ramps are provided, crosswalk markings shall be located so that the ramps are within the extension of the markings"
+    }
+   ],
+   "quote": "Where curb ramps are provided, crosswalk markings shall be located so that the curb ramps are within the extension of the crosswalk markings."
+  },
+  {
+   "id": "crosswalk.refuge",
+   "topic": "markings",
+   "title": "Pedestrian islands and medians",
+   "applies_to": [
+    "median",
+    "midblock crossing"
+   ],
+   "kind": "support",
+   "source": "mutcd",
+   "section": "3C.12 para 01",
+   "status": "verified",
+   "values": [
+    {
+     "name": "rule",
+     "text": "raised islands or medians of sufficient width can serve as a place of refuge for pedestrians; the minimum width for accessible refuge comes from the ADA standards (see PROWAG R302.2.1)"
+    }
+   ],
+   "quote": "can serve as a place of refuge for pedestrians who are attempting to cross at a midblock or intersection location."
+  },
+  {
+   "id": "signal.position",
+   "topic": "signals",
+   "title": "Longitudinal position of primary signal faces",
+   "applies_to": [
+    "signal"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "4D.08 para 01",
+   "status": "verified",
+   "values": [
+    {
+     "name": "distance beyond the stop line, minimum",
+     "us": 40,
+     "unit_us": "ft",
+     "si": 12.192,
+     "unit_si": "m"
+    },
+    {
+     "name": "distance beyond the stop line, maximum without a supplemental near-side face",
+     "us": 180,
+     "unit_us": "ft",
+     "si": 54.864,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "No less than 40 feet beyond the stop line, and No more than 180 feet beyond the stop line unless a supplemental near-side signal face is provided.",
+   "code": [
+    {
+     "name": "signal head 0.9 m past the stop bar (crossing.rs approach())",
+     "value_si": 0.9,
+     "conforms": false,
+     "note": "The primary signal faces must stand at least 40 ft (12.2 m) beyond the stop line: on the far side of the intersection. A head at the stop line is only a supplemental near-side face (4D.08 para 03). Not fixed yet: draw the primary head on the far side at the driver's right, 12.2 m or more past the bar (and optionally a near-side one). It changes how every signalled intersection looks, so it waits for the owner's say."
+    }
+   ]
+  },
+  {
+   "id": "signal.height",
+   "topic": "signals",
+   "title": "Mounting height of signal faces",
+   "applies_to": [
+    "signal"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "4D.09 para 01-02",
+   "status": "verified",
+   "values": [
+    {
+     "name": "bottom of housing over a roadway, minimum",
+     "us": 15,
+     "unit_us": "ft",
+     "si": 4.572,
+     "unit_si": "m"
+    },
+    {
+     "name": "bottom of housing not over a roadway, above the sidewalk or pavement, minimum",
+     "us": 8,
+     "unit_us": "ft",
+     "si": 2.4384,
+     "unit_si": "m"
+    },
+    {
+     "name": "above a median island on the near side, minimum",
+     "us": 4.5,
+     "unit_us": "ft",
+     "si": 1.3716,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "The bottom of the signal housing and any related attachments to a vehicular signal face located over any portion of a highway that can be used by motor vehicles shall be at least 15 feet above the pavement."
+  },
+  {
+   "id": "signal.offset",
+   "topic": "signals",
+   "title": "Lateral offset of signal faces mounted at the roadside",
+   "applies_to": [
+    "signal"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "4D.10 para 01",
+   "status": "verified",
+   "values": [
+    {
+     "name": "offset from the face of a vertical curb (or shoulder edge)",
+     "us": 2,
+     "unit_us": "ft",
+     "si": 0.6096,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "should have a horizontal offset of not less than 2 feet from the face of a vertical curb, or if there is no curb, not less than 2 feet from the edge of a shoulder.",
+   "code": [
+    {
+     "name": "signal head 0.9 m from the lane edge",
+     "value_si": 0.9,
+     "conforms": null,
+     "note": "Measured from the lane edge, not the kerb face; with an apron/bike lane/verge beside the lane the head stands past the kerb in most cases. Needs the real kerb position."
+    }
+   ]
+  },
+  {
+   "id": "sign.stop-size",
+   "topic": "signs",
+   "title": "STOP sign sizes (Table 2B-1)",
+   "applies_to": [
+    "stop sign"
+   ],
+   "kind": "table",
+   "source": "mutcd",
+   "section": "Table 2B-1, sheet 1",
+   "status": "verified",
+   "values": [
+    {
+     "name": "conventional road, single lane",
+     "us": 30,
+     "unit_us": "in",
+     "si": 0.762,
+     "unit_si": "m",
+     "text": "30 x 30 in"
+    },
+    {
+     "name": "conventional road, multi-lane",
+     "us": 36,
+     "unit_us": "in",
+     "si": 0.9144,
+     "unit_si": "m",
+     "text": "36 x 36 in"
+    },
+    {
+     "name": "expressway",
+     "us": 36,
+     "unit_us": "in",
+     "si": 0.9144,
+     "unit_si": "m",
+     "text": "36 x 36 in"
+    },
+    {
+     "name": "oversized",
+     "us": 48,
+     "unit_us": "in",
+     "si": 1.2192,
+     "unit_si": "m",
+     "text": "48 x 48 in"
+    }
+   ],
+   "quote": "Stop R1-1 2B.04 30 x 30 36 x 36 36 x 36 — 30 x 30* 48 x 48",
+   "code": [
+    {
+     "name": "stop sign octagon circumradius 0.413 m (30 in) or 0.495 m (36 in)",
+     "value_si": 0.75,
+     "conforms": true,
+     "note": "Fixed: circumradius 0.413 m for a single-lane approach (30 in across the flats) and 0.495 m for two or more inbound lanes (36 in)."
+    }
+   ]
+  },
+  {
+   "id": "sign.yield-size",
+   "topic": "signs",
+   "title": "YIELD sign sizes (Table 2B-1)",
+   "applies_to": [
+    "roundabout"
+   ],
+   "kind": "table",
+   "source": "mutcd",
+   "section": "Table 2B-1, sheet 1",
+   "status": "verified",
+   "values": [
+    {
+     "name": "conventional road, single lane",
+     "us": 36,
+     "unit_us": "in",
+     "si": 0.9144,
+     "unit_si": "m",
+     "text": "36 x 36 x 36 in"
+    },
+    {
+     "name": "conventional road, multi-lane",
+     "us": 48,
+     "unit_us": "in",
+     "si": 1.2192,
+     "unit_si": "m",
+     "text": "48 x 48 x 48 in"
+    },
+    {
+     "name": "freeway",
+     "us": 60,
+     "unit_us": "in",
+     "si": 1.524,
+     "unit_si": "m",
+     "text": "60 x 60 x 60 in"
+    }
+   ],
+   "quote": "Yield R1-2 2B.05 36 x 36 x 36 48 x 48 x 48 48 x 48 x 48 60 x 60 x 60"
+  },
+  {
+   "id": "sign.mount-height",
+   "topic": "signs",
+   "title": "Sign mounting height",
+   "applies_to": [
+    "all"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "2A.15 para 04-05, 07",
+   "status": "verified",
+   "values": [
+    {
+     "name": "rural: bottom of sign above the near pavement edge, minimum",
+     "us": 5,
+     "unit_us": "ft",
+     "si": 1.524,
+     "unit_si": "m"
+    },
+    {
+     "name": "business, commercial or residential area (and over a sidewalk), minimum",
+     "us": 7,
+     "unit_us": "ft",
+     "si": 2.1336,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "the minimum height, measured vertically from the bottom of the sign to the elevation of the near edge of the pavement, of signs installed at the side of the road shall be 5 feet"
+  },
+  {
+   "id": "sign.lateral-offset",
+   "topic": "signs",
+   "title": "Lateral offset of post-mounted signs",
+   "applies_to": [
+    "all"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "2A.16 para 03, 09-10",
+   "status": "verified",
+   "values": [
+    {
+     "name": "from the edge of the traveled way",
+     "us": 12,
+     "unit_us": "ft",
+     "si": 3.6576,
+     "unit_si": "m"
+    },
+    {
+     "name": "from the edge of a shoulder wider than 6 ft",
+     "us": 6,
+     "unit_us": "ft",
+     "si": 1.8288,
+     "unit_si": "m"
+    },
+    {
+     "name": "low-volume rural road where impractical",
+     "us": 2,
+     "unit_us": "ft",
+     "si": 0.6096,
+     "unit_si": "m"
+    },
+    {
+     "name": "business, commercial or residential area: from the face of the curb",
+     "us": 1,
+     "unit_us": "ft",
+     "si": 0.3048,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "For post-mounted signs, the minimum lateral offset should be 12 feet from the edge of the traveled way."
+  },
+  {
+   "id": "median.opening-signing",
+   "topic": "median",
+   "title": "Median openings: separate intersections or one",
+   "applies_to": [
+    "median"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "2A.23 para 01-02",
+   "status": "verified",
+   "values": [
+    {
+     "name": "rule",
+     "text": "a divided highway crossing should be signed and marked as separate intersections when the paths of opposing left turns cross each other and the interior approaches have adequate storage for the design vehicles; otherwise as one intersection"
+    }
+   ],
+   "quote": "A divided highway crossing should be signed and marked as separate intersections when both of the following conditions are present:"
+  },
+  {
+   "id": "rail.stop-line",
+   "topic": "railroad",
+   "title": "Stop line at a grade crossing",
+   "applies_to": [
+    "railroad"
+   ],
+   "kind": "guidance",
+   "source": "mutcd",
+   "section": "8C.03 para 03-06",
+   "status": "verified",
+   "values": [
+    {
+     "name": "passive crossing: no closer than, in advance of the nearest rail",
+     "us": 15,
+     "unit_us": "ft",
+     "si": 4.572,
+     "unit_si": "m"
+    },
+    {
+     "name": "active crossing with flashing lights: in advance of the flashing-light signal or gate, whichever is farther from the track",
+     "us": 8,
+     "unit_us": "ft",
+     "si": 2.4384,
+     "unit_si": "m"
+    },
+    {
+     "name": "active crossing: no closer than, in advance of the nearest rail",
+     "us": 15,
+     "unit_us": "ft",
+     "si": 4.572,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "it should be a transverse line at a right angle to the traveled way and should be placed approximately 8 feet in advance of the flashing-light signals or automatic gate (if present), whichever is farther from the track(s), but no closer than 15 feet in advance of the nearest rail",
+   "code": [
+    {
+     "name": "stop line 4.6 m from the nearest rail (scenarios.rs railroad())",
+     "value_si": 4.6,
+     "conforms": true,
+     "note": "15.1 ft: just over the 15 ft (4.572 m) minimum. The pole should stand about 2.4 m (8 ft) beyond the stop line toward the track: the code puts it 1.6 m beyond; it is not a conformance gap, since the 8 ft is approximate."
+    }
+   ]
+  },
+  {
+   "id": "rail.gate-arm",
+   "topic": "railroad",
+   "title": "Automatic gate arm",
+   "applies_to": [
+    "railroad"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "8D.03 para 02, 05, 07, 09, 14-15, 17",
+   "status": "verified",
+   "values": [
+    {
+     "name": "stripes",
+     "text": "vertical, alternately red and white at 16-inch intervals"
+    },
+    {
+     "name": "stripe interval",
+     "us": 16,
+     "unit_us": "in",
+     "si": 0.4064,
+     "unit_si": "m"
+    },
+    {
+     "name": "retroreflective sheeting width, first 32 ft from the mast, at least",
+     "us": 4,
+     "unit_us": "in",
+     "si": 0.1016,
+     "unit_si": "m"
+    },
+    {
+     "name": "height of the lowered arm above the crown of the road",
+     "min_us": 3.5,
+     "min_si": 1.0668,
+     "unit_us": "ft",
+     "unit_si": "m",
+     "max_us": 4.5,
+     "max_si": 1.3716
+    },
+    {
+     "name": "lights on the arm",
+     "text": "at least three red lights, about 4 in diameter if circular"
+    },
+    {
+     "name": "median islands that discourage driving around gates, length where space allows",
+     "us": 60,
+     "unit_us": "ft",
+     "si": 18.288,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "Gate arms shall be fully retroreflective on both sides and shall have vertical stripes alternately red and white at 16-inch intervals measured horizontally.",
+   "code": [
+    {
+     "name": "gate arm drawn as a plain red 0.2 m stroke across the inbound lane",
+     "value_si": 0.2,
+     "conforms": null,
+     "note": "The arm should cover the approaching lanes up to the centre line (8D.03 para 14: so that vehicles cannot drive around it 'without crossing the center line'): the code reaches the far edge of the inbound lanes, which is the centre line when the road has no median. Draw 0.41 m (16 in) red/white stripes."
+    }
+   ]
+  },
+  {
+   "id": "rail.flashing-light",
+   "topic": "railroad",
+   "title": "Flashing-light signals",
+   "applies_to": [
+    "railroad"
+   ],
+   "kind": "standard",
+   "source": "mutcd",
+   "section": "8D.02 para 06-14",
+   "status": "verified",
+   "values": [
+    {
+     "name": "lens",
+     "text": "8-inch or 12-inch nominal diameter"
+    },
+    {
+     "name": "centre-to-centre distance between the two red lights, approximately",
+     "us": 30,
+     "unit_us": "in",
+     "si": 0.762,
+     "unit_si": "m"
+    },
+    {
+     "name": "mounting height to the centre of the housing above the crown of the road",
+     "min_us": 8,
+     "min_si": 2.4384,
+     "unit_us": "ft",
+     "unit_si": "m",
+     "max_us": 9,
+     "max_si": 2.7432
+    },
+    {
+     "name": "placement",
+     "text": "to the right-hand side of approaching traffic on all approaches; back-to-back across the tracks for two-way roads"
+    }
+   ],
+   "quote": "The mounting height of the flashing-light units, measured from the center of the flashing-light unit housing to the elevation of the crown of the roadway, should be between 8 feet and 9 feet ."
+  },
+  {
+   "id": "rail.crossbuck",
+   "topic": "railroad",
+   "title": "Crossbuck (R15-1) and Number of Tracks plaque (R15-2P) minimum sizes",
+   "applies_to": [
+    "railroad"
+   ],
+   "kind": "table",
+   "source": "mutcd",
+   "section": "Table 8B-1",
+   "status": "verified",
+   "values": [
+    {
+     "name": "Crossbuck R15-1",
+     "text": "48 x 9 in blades"
+    },
+    {
+     "name": "Number of Tracks plaque R15-2P",
+     "text": "27 x 18 in"
+    },
+    {
+     "name": "STOP sign at a passive crossing, single lane",
+     "us": 30,
+     "unit_us": "in",
+     "si": 0.762,
+     "unit_si": "m",
+     "text": "30 x 30 in"
+    }
+   ],
+   "quote": "Grade Crossing (Crossbuck) R15-1 8B.03 48 x 9 48 x 9",
+   "code": [
+    {
+     "name": "crossbuck: two 1.4 m strokes at +-40 degrees",
+     "value_si": 1.4,
+     "conforms": null,
+     "note": "Blade length 48 in = 1.22 m: 1.4 m is a little long. Use 1.22 m."
+    }
+   ]
+  },
+  {
+   "id": "rail.gauge",
+   "topic": "railroad",
+   "title": "Track gauge and tie spacing",
+   "applies_to": [
+    "railroad"
+   ],
+   "kind": "typical",
+   "source": null,
+   "section": null,
+   "status": "unverified",
+   "values": [
+    {
+     "name": "standard gauge",
+     "text": "4 ft 8.5 in (1.435 m), from general knowledge; 49 CFR 213.53 sets track gauge limits"
+    },
+    {
+     "name": "tie spacing",
+     "text": "about 0.5 m; the code uses 0.6 m"
+    }
+   ],
+   "code": [
+    {
+     "name": "rails 1.435 m apart, ties every 0.6 m, ballast bed 4.0 m",
+     "value_si": 1.435,
+     "conforms": null,
+     "note": "Verify against 49 CFR 213.53 (eCFR, public) and the FRA/AREMA references; not retrieved."
+    }
+   ]
+  },
+  {
+   "id": "ped.clear-width",
+   "topic": "pedestrian",
+   "title": "Pedestrian access route clear width",
+   "applies_to": [
+    "sidewalk",
+    "crosswalk"
+   ],
+   "kind": "standard",
+   "source": "prowag",
+   "section": "R302.2, R302.3",
+   "status": "verified",
+   "values": [
+    {
+     "name": "continuous clear width, minimum",
+     "us": 48,
+     "unit_us": "in",
+     "si": 1.2192,
+     "unit_si": "m"
+    },
+    {
+     "name": "passing space interval if narrower than 60 in",
+     "us": 200,
+     "unit_us": "ft",
+     "si": 60.96,
+     "unit_si": "m"
+    },
+    {
+     "name": "passing space size",
+     "us": 60,
+     "unit_us": "in",
+     "si": 1.524,
+     "unit_si": "m",
+     "text": "60 x 60 in"
+    }
+   ],
+   "quote": "the continuous clear width of pedestrian access routes shall be 48 inches (1220 mm) minimum",
+   "code": [
+    {
+     "name": "sidewalk element 1.5 m (59 in)",
+     "value_si": 1.5,
+     "conforms": true,
+     "note": "Over the 48 in minimum; the 60 in passing space is met within 1 in."
+    }
+   ]
+  },
+  {
+   "id": "ped.refuge-width",
+   "topic": "pedestrian",
+   "title": "Medians and pedestrian refuge islands",
+   "applies_to": [
+    "median",
+    "midblock crossing"
+   ],
+   "kind": "standard",
+   "source": "prowag",
+   "section": "R302.2.1",
+   "status": "verified",
+   "values": [
+    {
+     "name": "clear width of the route across a median or island, minimum",
+     "us": 60,
+     "unit_us": "in",
+     "si": 1.524,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "The clear width of pedestrian access routes crossing medians and pedestrian refuge islands shall be 60 inches (1525 mm) minimum",
+   "code": [
+    {
+     "name": "median element 3.0 m (118 in); margin 3.0 m",
+     "value_si": 3.0,
+     "conforms": true,
+     "note": "Wide enough to be a refuge."
+    }
+   ]
+  },
+  {
+   "id": "ped.cross-slope",
+   "topic": "pedestrian",
+   "title": "Cross slope of pedestrian access routes",
+   "applies_to": [
+    "sidewalk",
+    "crosswalk"
+   ],
+   "kind": "standard",
+   "source": "prowag",
+   "section": "R302.5.1, R302.5.2.1-4",
+   "status": "verified",
+   "values": [
+    {
+     "name": "not within a crosswalk",
+     "ratio": "1:48 (2.1%) maximum"
+    },
+    {
+     "name": "crosswalk with yield or stop control",
+     "ratio": "1:48 (2.1%) maximum"
+    },
+    {
+     "name": "crosswalk at an uncontrolled approach",
+     "ratio": "1:20 (5.0%) maximum"
+    },
+    {
+     "name": "crosswalk at a signal or pedestrian hybrid beacon",
+     "ratio": "1:20 (5.0%) maximum"
+    },
+    {
+     "name": "midblock and roundabout crosswalks",
+     "text": "not more than the street grade"
+    }
+   ],
+   "quote": "the cross slope of the pedestrian access route shall be 1:20 (5.0%) maximum."
+  },
+  {
+   "id": "ped.curb-ramp",
+   "topic": "pedestrian",
+   "title": "Curb ramps",
+   "applies_to": [
+    "crosswalk",
+    "driveway"
+   ],
+   "kind": "standard",
+   "source": "prowag",
+   "section": "R304.2.1, R304.2.2, R304.5.1.1, R304.2.4-5",
+   "status": "verified",
+   "values": [
+    {
+     "name": "running slope",
+     "ratio": "1:12 (8.3%) maximum; where the ramp must exceed 15 ft (4.6 m) to get 1:12, at least 15 ft with a steeper slope"
+    },
+    {
+     "name": "cross slope of the ramp run",
+     "ratio": "1:48 (2.1%) maximum"
+    },
+    {
+     "name": "clear width of the run, excluding flares, minimum",
+     "us": 48,
+     "unit_us": "in",
+     "si": 1.2192,
+     "unit_si": "m"
+    },
+    {
+     "name": "landing at the top",
+     "us": 48,
+     "unit_us": "in",
+     "si": 1.2192,
+     "unit_si": "m",
+     "text": "48 x 48 in minimum"
+    }
+   ],
+   "quote": "The running slope of the curb ramp shall be 1:12 (8.3%) maximum."
+  },
+  {
+   "id": "ped.signal-timing",
+   "topic": "pedestrian",
+   "title": "Pedestrian clearance time",
+   "applies_to": [
+    "signal"
+   ],
+   "kind": "standard",
+   "source": "prowag",
+   "section": "R306.2",
+   "status": "verified",
+   "values": [
+    {
+     "name": "walking speed for clearance time, at most",
+     "text": "3.5 ft/s (1.1 m/s)"
+    },
+    {
+     "name": "walk interval, minimum",
+     "text": "7 seconds"
+    }
+   ],
+   "quote": "pedestrian signal phase timing shall be based on a pedestrian clearance time that is calculated using a pedestrian walking speed of 3.5 ft/s (1.1 m/s) or less"
+  },
+  {
+   "id": "turn-lane.taper",
+   "topic": "turn lanes",
+   "title": "Approach-end taper of a turn lane",
+   "applies_to": [
+    "turn pocket"
+   ],
+   "kind": "state-standard",
+   "source": "fdot212",
+   "section": "212.14.3",
+   "status": "verified-secondary",
+   "values": [
+    {
+     "name": "one turn lane",
+     "us": 50,
+     "unit_us": "ft",
+     "si": 15.24,
+     "unit_si": "m"
+    },
+    {
+     "name": "two or more turn lanes",
+     "us": 100,
+     "unit_us": "ft",
+     "si": 30.48,
+     "unit_si": "m"
+    },
+    {
+     "name": "design speed",
+     "text": "applies to all design speeds"
+    }
+   ],
+   "quote": "The length of approach end tapers is 50 feet for a single turn lane and 100 feet for two or more turn lanes, as shown Exhibit 212-1.",
+   "code": [
+    {
+     "name": "pocket_taper default 15 m",
+     "value_si": 15.0,
+     "conforms": true,
+     "note": "49.2 ft: matches the single-turn-lane 50 ft taper."
+    }
+   ]
+  },
+  {
+   "id": "turn-lane.queue",
+   "topic": "turn lanes",
+   "title": "Queue (storage) length of a turn lane",
+   "applies_to": [
+    "turn pocket"
+   ],
+   "kind": "state-standard",
+   "source": "fdot212",
+   "section": "212.14.2",
+   "status": "verified-secondary",
+   "values": [
+    {
+     "name": "minimum for low volume rural, 2 vehicles",
+     "us": 50,
+     "unit_us": "ft",
+     "si": 15.24,
+     "unit_si": "m"
+    },
+    {
+     "name": "minimum for urbanized areas, 4 vehicles",
+     "us": 100,
+     "unit_us": "ft",
+     "si": 30.48,
+     "unit_si": "m"
+    },
+    {
+     "name": "truck traffic over 10%",
+     "text": "accommodate at least one car and one truck"
+    }
+   ],
+   "quote": "a minimum 50-foot queue length (2 vehicles) should be provided for rural context classifications. A minimum 100-foot queue length (4 vehicles) should be provided in urbanized context classifications.",
+   "code": [
+    {
+     "name": "pocket_length default 30 m",
+     "value_si": 30.0,
+     "conforms": true,
+     "note": "98 ft full-width length: meets the 100 ft urban queue length almost exactly; the deceleration length (Exhibit 212-1) comes on top of the queue, so a fast road needs a longer pocket."
+    }
+   ]
+  },
+  {
+   "id": "turn-lane.auxiliary-length",
+   "topic": "turn lanes",
+   "title": "Auxiliary lane length",
+   "applies_to": [
+    "turn pocket"
+   ],
+   "kind": "state-standard",
+   "source": "fdot212",
+   "section": "212.14",
+   "status": "verified-secondary",
+   "values": [
+    {
+     "name": "length",
+     "text": "the sum of the deceleration length, the queue length and the approach end taper"
+    }
+   ],
+   "quote": "The length of the auxiliary lanes is the sum of the deceleration length, queue length and approach end taper."
+  },
+  {
+   "id": "turn-lane.taper-formula",
+   "topic": "turn lanes",
+   "title": "Merging taper formula",
+   "applies_to": [
+    "turn pocket",
+    "ramp"
+   ],
+   "kind": "state-standard",
+   "source": "fdot212",
+   "section": "212.6",
+   "status": "verified-secondary",
+   "values": [
+    {
+     "name": "design speed 40 mph or less",
+     "formula": "L = W x S^2 / 60"
+    },
+    {
+     "name": "design speed 45 mph or more",
+     "formula": "L = W x S"
+    },
+    {
+     "name": "shifting taper",
+     "formula": "half the merging taper"
+    }
+   ],
+   "quote": "(a) For design speeds ≤ 40 mph: L = (W*S2)/60 (b) For design speeds ≥ 45 mph: L = W*S"
+  },
+  {
+   "id": "median.min-width",
+   "topic": "median",
+   "title": "Minimum median width by function",
+   "applies_to": [
+    "median",
+    "median opening"
+   ],
+   "kind": "state-standard",
+   "source": "fdot212",
+   "section": "Table 212.9.1",
+   "status": "verified-secondary",
+   "values": [
+    {
+     "name": "separation of opposing traffic",
+     "us": 4,
+     "unit_us": "ft",
+     "si": 1.2192,
+     "unit_si": "m"
+    },
+    {
+     "name": "pedestrian refuge",
+     "us": 6,
+     "unit_us": "ft",
+     "si": 1.8288,
+     "unit_si": "m"
+    },
+    {
+     "name": "protection of vehicles crossing through lanes",
+     "us": 22,
+     "unit_us": "ft",
+     "si": 6.7056,
+     "unit_si": "m"
+    },
+    {
+     "name": "U-turns from a left-turn lane to the outside lanes",
+     "us": 30,
+     "unit_us": "ft",
+     "si": 9.144,
+     "unit_si": "m"
+    },
+    {
+     "name": "dual left turn lanes and U-turns",
+     "us": 42,
+     "unit_us": "ft",
+     "si": 12.8016,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "Provision for pedestrian refuge 6 | Provision for protection of vehicles crossing through lanes 22 | Provision for U-turns, left turn lane to outside lanes 30",
+   "code": [
+    {
+     "name": "median element 3.0 m; margin 3.0 m",
+     "value_si": 3.0,
+     "conforms": true,
+     "note": "9.8 ft: fine for opposing-traffic separation and pedestrian refuge; too narrow for a left-turn pocket (3.3 m) with no room: the code already reports that; or for a U-turn (30 ft = 9.1 m)."
+    }
+   ]
+  },
+  {
+   "id": "median.opening-length",
+   "topic": "median",
+   "title": "Length of a full median opening",
+   "applies_to": [
+    "median opening"
+   ],
+   "kind": "state-standard",
+   "source": "fdot212",
+   "section": "212.9",
+   "status": "verified-secondary",
+   "values": [
+    {
+     "name": "length",
+     "text": "typically the same width as the intersecting road, including shoulders, to accommodate the swept path of left-turning vehicles; at an unsignalized intersection no longer than required"
+    }
+   ],
+   "quote": "The overall length of a full median opening is typically the same width as the intersecting road (including shoulders) which is sufficient to accommodate the swept path of left turning vehicles.",
+   "code": [
+    {
+     "name": "opening default: the cross road's width",
+     "value_si": 18.0,
+     "conforms": true,
+     "note": "Fixed: the default is now the cross road's own width (clamped to 8 to 40 m); an explicit length still wins."
+    }
+   ]
+  },
+  {
+   "id": "median.offset-left",
+   "topic": "median",
+   "title": "Offset left-turn lanes",
+   "applies_to": [
+    "turn pocket",
+    "median"
+   ],
+   "kind": "state-standard",
+   "source": "fdot212",
+   "section": "212.14.4",
+   "status": "verified-secondary",
+   "values": [
+    {
+     "name": "curbed roadway: use offset left-turn lanes with median wider than",
+     "us": 18,
+     "unit_us": "ft",
+     "si": 5.4864,
+     "unit_si": "m"
+    },
+    {
+     "name": "separator between the turn lane and opposing traffic, when possible",
+     "us": 4,
+     "unit_us": "ft",
+     "si": 1.2192,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "On curbed roadway designs, offset left-turn lanes should be used with median widths greater than 18 feet. A 4-foot traffic separator should be used when possible"
+  },
+  {
+   "id": "island.refuge-bicycle",
+   "topic": "median",
+   "title": "Refuge islands used by bicyclists",
+   "applies_to": [
+    "median",
+    "midblock crossing"
+   ],
+   "kind": "state-standard",
+   "source": "fdot212",
+   "section": "212.13.3",
+   "status": "verified-secondary",
+   "values": [
+    {
+     "name": "minimum width when bicyclists use the island",
+     "us": 6,
+     "unit_us": "ft",
+     "si": 1.8288,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "Refuge islands should be a minimum of 6 feet wide when they will be used for bicyclists."
+  },
+  {
+   "id": "corner.control-radii",
+   "topic": "kerb",
+   "title": "Control radii for minimum-speed turns (10 to 15 mph)",
+   "applies_to": [
+    "intersection"
+   ],
+   "kind": "state-standard",
+   "source": "fdot212",
+   "section": "Table 212.9.2",
+   "status": "verified-secondary",
+   "values": [
+    {
+     "name": "control radius, ft",
+     "text": "50 (40 min) for predominantly passenger cars occasionally SU-30; 60 (50 min) for SU-30 occasionally SU-40 or WB-40; 75 for SU-40/WB-40 occasionally WB-62; 130 for WB-62FL occasionally WB-67"
+    }
+   ],
+   "quote": "Control Radius (feet) 50 (40 min) 60 (50 min) 75 130",
+   "code": [
+    {
+     "name": "kerb return default 6 m (19.7 ft); slip radius 15 m",
+     "value_si": 6.0,
+     "conforms": null,
+     "note": "The 6 m default is a small urban corner for passenger cars. FDOT's table gives edge-of-traveled-way radii of 50 ft for SU-30 and 80 ft for SU-40 at 90 degrees (Table 212.12.1); the passenger-car row did not extract cleanly and was not used. The kerb radius is the edge of pavement, which is smaller than a control radius."
+    }
+   ]
+  },
+  {
+   "id": "roundabout.icd",
+   "topic": "roundabout",
+   "title": "Typical inscribed circle diameter",
+   "applies_to": [
+    "roundabout"
+   ],
+   "kind": "state-standard",
+   "source": "wisdot_1126",
+   "section": "Table 8.1 (citing NCHRP Report 1043)",
+   "status": "verified-secondary",
+   "values": [
+    {
+     "name": "mini",
+     "text": "less than 80 ft"
+    },
+    {
+     "name": "compact",
+     "text": "80 to 120 ft"
+    },
+    {
+     "name": "single-lane",
+     "text": "120 to 160 ft"
+    },
+    {
+     "name": "multilane, 2-lane entry",
+     "text": "160 to 215 ft"
+    },
+    {
+     "name": "multilane, 3-lane entry",
+     "text": "215 to 275 ft"
+    }
+   ],
+   "quote": "Single-lane 120 -160 ft less than 25,000",
+   "code": [
+    {
+     "name": "roundabout diameter default 40 m (131 ft)",
+     "value_si": 40.0,
+     "conforms": true,
+     "note": "In the single-lane range of 120 to 160 ft; also inside SCDOT's 105 to 150 ft."
+    }
+   ]
+  },
+  {
+   "id": "roundabout.icd-scdot",
+   "topic": "roundabout",
+   "title": "Inscribed circle diameter, single-lane and multilane (NCHRP 672 as summarised by SCDOT)",
+   "applies_to": [
+    "roundabout"
+   ],
+   "kind": "state-standard",
+   "source": "scdot_rbt",
+   "section": "9.1.1 items 2 and 3",
+   "status": "verified-secondary",
+   "values": [
+    {
+     "name": "single-lane typical",
+     "text": "105 to 150 ft"
+    },
+    {
+     "name": "single-lane for a WB-62 design vehicle, at least",
+     "us": 105,
+     "unit_us": "ft",
+     "si": 32.004,
+     "unit_si": "m"
+    },
+    {
+     "name": "single-lane for a WB-67, typically",
+     "text": "130 to 150 ft"
+    },
+    {
+     "name": "multilane typical",
+     "text": "150 to 300 ft"
+    },
+    {
+     "name": "two-lane common starting point",
+     "text": "160 to 180 ft"
+    },
+    {
+     "name": "desirable maximum entry design speed",
+     "text": "single-lane 20 to 25 mph; multilane 25 to 30 mph"
+    }
+   ],
+   "quote": "The inscribed circle diameter typically needs to be at least 105 feet to accommodate a WB-62 design vehicle."
+  },
+  {
+   "id": "roundabout.circulatory-width",
+   "topic": "roundabout",
+   "title": "Circulatory roadway width",
+   "applies_to": [
+    "roundabout"
+   ],
+   "kind": "state-standard",
+   "source": "scdot_rbt",
+   "section": "9.1.1 item 5",
+   "status": "verified-secondary",
+   "values": [
+    {
+     "name": "single-lane typical",
+     "min_us": 14,
+     "min_si": 4.2672,
+     "unit_us": "ft",
+     "unit_si": "m",
+     "max_us": 18,
+     "max_si": 5.4864
+    },
+    {
+     "name": "multilane, each lane",
+     "min_us": 14,
+     "min_si": 4.2672,
+     "unit_us": "ft",
+     "unit_si": "m",
+     "max_us": 16,
+     "max_si": 4.8768
+    },
+    {
+     "name": "tyre track to the curb line, minimum",
+     "us": 1,
+     "unit_us": "ft",
+     "si": 0.3048,
+     "unit_si": "m"
+    },
+    {
+     "name": "tyre track to the curb line, preferred",
+     "us": 2,
+     "unit_us": "ft",
+     "si": 0.6096,
+     "unit_si": "m"
+    }
+   ],
+   "quote": "Typical circulatory roadway widths range from 14 feet to 18 feet for single-lane roundabouts.",
+   "code": [
+    {
+     "name": "ring width min(5.5 m, 0.3 x radius) = 5.5 m",
+     "value_si": 5.5,
+     "conforms": true,
+     "note": "18.0 ft: at the top of the single-lane range."
+    }
+   ]
+  }
+ ]
+}

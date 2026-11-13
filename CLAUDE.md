@@ -38,6 +38,7 @@ not a developer: keep chat answers short and plain. Never push to `main`; work o
 6. **Docs and commit.** Update `docs/SCENARIOS.md` (status, rules) and the README; commit with the trailer; push the branch; install into the running app and restart the panel.
 
 ## Rules
+- Standards: values come from `library/standards.json` (`docs/STANDARDS.md` is generated: `node scripts/standards.mjs md`). Name a dimension in `core/src/standards.rs` and add it to `core/tests/standards.rs`; mark a database entry `verified` only if you read it in a federal source, `verified-secondary` for a state manual, `unverified` for anything from memory. The FHWA safety site and highways.dot.gov return 403 to scripts: do not spoof a browser to get past that, download by hand or use another source.
 - Widths are "typical, not surveyed". Never describe a generated drawing as a survey or as compliant with a standard unless the value is verified from the source and cited in `docs/SCENARIOS.md`.
 - Do not copy the owner's other projects' data into this repo (it is public). The Ross Bridge Parkway migration is parked until the owner says otherwise.
 - Never force-push or squash, and never push to `main`.

@@ -114,6 +114,14 @@ impl Out {
         self.text.push_str(",\"cap\":\"butt\",\"join\":\"miter\",\"miterLimit\":4}]}");
     }
 
+    /// Several closed filled shapes in one object (a row of triangles, say), with no outline.
+    pub fn fills(&mut self, name: &str, rings: &[Vec<P>], map: impl Fn(P) -> P, rgb: [f64; 3]) {
+        self.open_object(name, rings, &map, true);
+        self.text.push_str(",\"fills\":[");
+        self.paint(rgb);
+        self.text.push_str("]}");
+    }
+
     /// A new filled shape with no outline.
     pub fn polygon(&mut self, name: &str, ring: &[P], map: impl Fn(P) -> P, rgb: [f64; 3]) {
         self.open_object(name, std::slice::from_ref(&ring.to_vec()), &map, true);

@@ -128,7 +128,7 @@ function show(s) {
     $("cpocket").value = sp.pocket ?? "none";
     $("cpocketLenRow").hidden = (sp.pocket ?? "none") === "none";
     $("cstub").value = sp.stub ?? "keep";
-    for (const [id, v, d] of [["cdia", sp.diameter, 40], ["copen", sp.opening, 18], ["caccel", sp.accel_length, 120], ["cpocketlen", sp.pocket_length, 30]]) if (document.activeElement !== $(id)) $(id).value = v ?? d;
+    for (const [id, v, d] of [["cdia", sp.diameter, 40], ["copen", sp.opening, ""], ["caccel", sp.accel_length, 120], ["cpocketlen", sp.pocket_length, 30]]) if (document.activeElement !== $(id)) $(id).value = v ?? d;
     $("ccancel").hidden = !cv.proposed;
   }
 
@@ -216,7 +216,7 @@ $("cgates").onchange = () => cpatch({ gates: $("cgates").checked });
 $("cslip").onchange = () => cpatch({ slip: $("cslip").checked });
 $("cpocket").onchange = () => cpatch({ pocket: $("cpocket").value });
 $("cpocketlen").onchange = () => cpatch({ pocket_length: Number($("cpocketlen").value) || 30 });
-$("copen").onchange = () => cpatch({ opening: Number($("copen").value) || 18 });
+$("copen").onchange = () => cpatch({ opening: Number($("copen").value) || null });
 $("caccel").onchange = () => cpatch({ accel_length: Number($("caccel").value) || 120 });
 const hpatch = (patch) => act("hub", { patch });
 $("htreat").onchange = () => hpatch({ treatment: $("htreat").value });

@@ -317,7 +317,7 @@ pub fn build(items: &[Item], spec: &Spec, out: &mut Out) -> Vec<String> {
 
         // Stop bars and the signal heads or stop signs.
         if jspec.control != Control::None {
-            let back = if jspec.crosswalks { cw + 0.9 } else { 0.6 };
+            let back = if jspec.crosswalks { cw + crate::standards::STOP_LINE_SETBACK_MIN + crate::standards::STOP_LINE_WIDTH / 2.0 } else { 0.6 };
             if jspec.control == Control::Signal {
                 for (sv, want) in [(-1.0, Dir::Fwd), (1.0, Dir::Back)] {
                     let lanes: Vec<&Placed> = main.iter().filter(|e| travel(e) && e.dir == Some(want)).collect();
@@ -350,7 +350,8 @@ pub fn build(items: &[Item], spec: &Spec, out: &mut Out) -> Vec<String> {
                 let pole_v = if l.su > 0.0 { v1 + 0.9 } else { v0 - 0.9 };
                 let c = fr.at(ub + l.su * 0.9, pole_v);
                 if jspec.control == Control::Stop {
-                    out.polygon(&format!("{base}.sign.leg.{}", k + 1), &polygon(8, c, 0.75), flip, [0.8, 0.12, 0.12]);
+                    let radius = if lanes.len() >= 2 { crate::standards::STOP_SIGN_RADIUS_MULTI } else { crate::standards::STOP_SIGN_RADIUS_SINGLE };
+                    out.polygon(&format!("{base}.sign.leg.{}", k + 1), &polygon(8, c, radius), flip, [0.8, 0.12, 0.12]);
                 } else {
                     out.polygon(&format!("{base}.signal.leg.{}", k + 1), &polygon(4, c, 0.8), flip, [0.15, 0.15, 0.17]);
                     out.polygon(&format!("{base}.signal.leg.{}.lamp", k + 1), &polygon(8, c, 0.28), flip, [0.2, 0.85, 0.3]);

@@ -101,21 +101,23 @@ fn crosswalks_stop_bars_and_signals_are_on_the_side_traffic_enters() {
     let (out, _) = run(&across(), &spec(signals()));
     // Road a (north): northbound traffic (the east half) enters from the south, so its bar is south of the box, over x 201.5..208.7.
     let bar = pts(&out, "gen.crossing.k1.stop.a.before");
-    assert!(bar.iter().all(|p| (p[1] - 408.5).abs() < 1e-3), "{bar:?}");
+    // The crosswalk's outer edge is 7.6 m from the middle; the bar must be at least 4 ft (1.22 m) beyond it: its centre is 9.12 m out, its near edge (0.3 m nearer) 1.22 m past the crosswalk.
+    assert!(bar.iter().all(|p| (p[1] - 409.12).abs() < 1e-3), "{bar:?}");
+    assert!(((409.12 - 0.3) - 407.6) >= 1.22 - 1e-9);
     let (lo, hi) = bbox(&bar);
     assert!((lo[0] - 201.5).abs() < 1e-3 && (hi[0] - 208.7).abs() < 1e-3, "northbound lanes only: {lo:?} {hi:?}");
     // Southbound traffic (west half) enters from the north.
     let bar = pts(&out, "gen.crossing.k1.stop.a.after");
     let (lo, hi) = bbox(&bar);
-    assert!((lo[1] - 391.5).abs() < 1e-3 && (lo[0] - 191.3).abs() < 1e-3 && (hi[0] - 198.5).abs() < 1e-3, "{lo:?} {hi:?}");
+    assert!((lo[1] - 390.88).abs() < 1e-3 && (lo[0] - 191.3).abs() < 1e-3 && (hi[0] - 198.5).abs() < 1e-3, "{lo:?} {hi:?}");
     // Road b runs east: eastbound traffic (south half, y 400..403.6) enters from the west, westbound (north half) from the east.
     let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.stop.b.before"));
-    assert!((lo[0] - 184.3).abs() < 1e-3 && (lo[1] - 400.0).abs() < 1e-3 && (hi[1] - 403.6).abs() < 1e-3, "{lo:?} {hi:?}");
+    assert!((lo[0] - 183.68).abs() < 1e-3 && (lo[1] - 400.0).abs() < 1e-3 && (hi[1] - 403.6).abs() < 1e-3, "{lo:?} {hi:?}");
     let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.stop.b.after"));
-    assert!((lo[0] - 215.7).abs() < 1e-3 && (lo[1] - 396.4).abs() < 1e-3 && (hi[1] - 400.0).abs() < 1e-3, "{lo:?} {hi:?}");
+    assert!((lo[0] - 216.32).abs() < 1e-3 && (lo[1] - 396.4).abs() < 1e-3 && (hi[1] - 400.0).abs() < 1e-3, "{lo:?} {hi:?}");
     // The signal head for northbound traffic stands beside the bar on the east (driver's right) side.
     let c = centre(&pts(&out, "gen.crossing.k1.signal.a.before"));
-    assert!((c[0] - 209.6).abs() < 0.2 && (c[1] - 409.4).abs() < 0.2, "{c:?}");
+    assert!((c[0] - 209.6).abs() < 0.2 && (c[1] - 410.02).abs() < 0.2, "{c:?}");
     // The crosswalk across the south arm of road a lies between the box and the bar.
     let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.crosswalk.a.before"));
     assert!((lo[1] - 404.6).abs() < 1e-3 && (hi[1] - 407.6).abs() < 1e-3, "{lo:?} {hi:?}");
@@ -607,11 +609,14 @@ fn a_midblock_crossing_has_bars_over_the_lanes_not_the_median_and_a_stop_line_ea
     assert!(bars.iter().all(|p| !(p[0] > 198.0 && p[0] < 202.0)), "the median is a refuge");
     let (lo, hi) = bbox(&bars);
     assert!((lo[1] - 398.5).abs() < 1e-3 && (hi[1] - 401.5).abs() < 1e-3, "3 m deep, centred on the crossing: {lo:?} {hi:?}");
-    // Stop lines 6 m (half the crosswalk plus 4.5 m) from the middle, over the lanes that approach: northbound from the south, southbound from the north.
-    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.stop.before"));
-    assert!((lo[0] - 202.0).abs() < 1e-3 && (hi[0] - 209.2).abs() < 1e-3 && (lo[1] - 406.0).abs() < 1e-3, "{lo:?} {hi:?}");
-    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.stop.after"));
-    assert!((lo[0] - 190.8).abs() < 1e-3 && (hi[0] - 198.0).abs() < 1e-3 && (lo[1] - 394.0).abs() < 1e-3, "{lo:?} {hi:?}");
+    // Yield lines (an uncontrolled crossing): a row of triangles 7.7 m (half the crosswalk plus 6.2 m, over the 20 ft minimum) from the middle, base
+    // toward the crosswalk and apex 0.675 m toward the approaching traffic, over the lanes that approach: northbound from the south, southbound from the north.
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.yield.before"));
+    assert!((lo[0] - 202.075).abs() < 1e-3 && (hi[0] - 209.125).abs() < 1e-3 && (lo[1] - 407.7).abs() < 1e-3 && (hi[1] - 408.375).abs() < 1e-3, "{lo:?} {hi:?}");
+    assert_eq!(subpaths(&out, "gen.crossing.k1.yield.before"), 12, "twelve 0.45 m triangles 0.15 m apart across the 7.2 m of lanes");
+    let (lo, hi) = bbox(&pts(&out, "gen.crossing.k1.yield.after"));
+    assert!((lo[0] - 190.875).abs() < 1e-3 && (hi[0] - 197.925).abs() < 1e-3 && (lo[1] - 391.625).abs() < 1e-3 && (hi[1] - 392.3).abs() < 1e-3, "{lo:?} {hi:?}");
+    assert!(!names(&out).iter().any(|n| n.contains(".stop.")), "stop lines are for stop-controlled approaches");
     // Beacons stand 0.9 m beyond each kerb.
     let c1 = centre(&pts(&out, "gen.crossing.k1.beacon.1"));
     let c2 = centre(&pts(&out, "gen.crossing.k1.beacon.2"));

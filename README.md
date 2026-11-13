@@ -86,6 +86,12 @@ After each Draw the panel sorts the drawing into layers: `road r1` holds `road r
 visible. The panel shows and unlocks these layers just for the rebuild (a hidden or locked object is not seen by a filter, so its road would
 vanish) and puts your hiding and locking back afterwards. Rebuilding from VectorCraft's own menu does not sort layers; press Draw in the panel.
 
+## Standards (new in 0.5)
+`library/standards.json` records the US design and dimension standards behind the drawing (MUTCD 11th Edition with Revision 1, US Access
+Board PROWAG, and state design manuals where the federal documents leave a number to the designer), each with section, quote and a verified
+status; `docs/STANDARDS.md` is the readable version. The NTSB investigates crashes and does not publish dimensions. Marking, crosswalk, stop-line,
+sign, railroad and roundabout-crosswalk dimensions follow the MUTCD; lane, bike-lane and kerb widths are typical, not standards.
+
 ## The companion panel (new in 0.3)
 
 A small page beside VectorCraft where you describe roads in words and click them to see and change their elements:
