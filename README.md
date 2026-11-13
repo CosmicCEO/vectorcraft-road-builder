@@ -120,7 +120,7 @@ returns the same bytes.
 ```
 sh scripts/build.sh                  # needs rustup + the wasm32-unknown-unknown target (see the script header)
 cargo test --release                 # 100 native tests: geometry, every scenario, the standards database, the round trip
-node --test panel/test/              # 53 panel tests against a fake VectorCraft (needs the helper: cargo build --release -p road-builder-cli)
+node --test panel/test/*.test.mjs    # 53 panel tests against a fake VectorCraft (needs the helper: cargo build --release -p road-builder-cli)
 node scripts/standards.mjs check     # validates the standards database; "md" regenerates docs/STANDARDS.md
 sh scripts/package.sh 0.6.0          # builds the release package into dist/
 node scripts/vc.mjs <method> '<json>'   # drive a running VectorCraft (open -a VectorCraft --args --control 7979)

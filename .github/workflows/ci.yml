@@ -28,7 +28,7 @@ jobs:
           cargo build --release -p road-builder-cli
 
       - name: Panel tests
-        run: node --test panel/test/
+        run: node --test panel/test/*.test.mjs
 
       - name: Standards database is valid and its document is up to date
         run: |
