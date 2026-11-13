@@ -1,0 +1,34 @@
+name: Release
+
+# Push a tag like v0.6.0 to build the plug-ins, run the tests and publish a GitHub release with the package attached.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
+          rustup default stable
+
+      - name: Tests
+        run: |
+          cargo test --release --workspace
+          cargo build --release -p road-builder-cli
+          node --test panel/test/
+
+      - name: Package
+        run: sh scripts/package.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --title "Road Builder $GITHUB_REF_NAME" --notes-file dist/RELEASE-NOTES.md dist/*.zip dist/SHA256SUMS

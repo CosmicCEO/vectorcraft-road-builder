@@ -1,125 +1,89 @@
 # Road Builder for VectorCraft
 
-Draw a road as **one centerline path**; the plug-in builds everything else. Three WebAssembly plug-ins for
-[VectorCraft](https://github.com/storytold/vectorcraft) (v0.24+), written in Rust, sharing one core:
+Draw a road as **one line**; Road Builder builds the lanes, kerbs, markings, signs, signals and intersections from it. Describe what you want in plain
+words or with a few choices, press **Draw**, and edit the line to reshape the road. Your line is never changed, only what is built from it.
 
-| Plug-in | Kind | What it does |
-|---|---|---|
-| **Road Builder road (.pmap)** `…roadbuilder.import` | importer | File > Open a `.pmap` road file: the road becomes named paths you can edit. |
-| **Build Road** `…roadbuilder.build` | filter | Regenerates lane lines, pavement edges and junction pieces (side street, zebra crossing, stop bar) from the paths you edit. Also has the command **Add Junction**. |
-| **Road Builder road (.pmap)** `…roadbuilder.export` | exporter | File > Export As: writes the edited road back to `.pmap`. |
+<p align="center"><img src="docs/images/multi-lane.png" alt="A divided six-lane road crossing a divided four-lane road at a signalised intersection, with left and right turn pockets, slip lanes, crosswalks, and a lane added north of the intersection and dropped south of it" width="460"><br>
+<em>A complex multi-lane intersection, built from two lines: a divided 3+3-lane road with bike lanes and sidewalks crossing a divided 2+2-lane road at traffic signals, with left and right turn pockets (45 m, tapered), slip lanes with islands, crosswalks, a far-side signal head for each approach, a northbound lane added 70 m north of the intersection and a southbound lane dropped south of it.</em></p>
 
-The `.pmap` file is a compact, diff-friendly JSON description of the road (see [Format](#the-pmap-format)). A change in VectorCraft
-shows up in git as a one-line diff.
+<p align="center"><img src="docs/images/four-way-stop.png" alt="A simple four-way stop: two two-lane roads with sidewalks, stop signs, stop bars and crosswalks" width="380"><br>
+<em>A simple four-way stop: two two-lane streets with sidewalks, a stop sign and stop bar on every approach, crosswalks, and 6 m kerb returns. Both images are drawn by the plug-in itself, with the editable lines hidden.</em></p>
 
-## Use it
+> Every drawing is an **illustrative reconstruction, not a survey**. Dimensions follow the US MUTCD where it sets one and are typical values where it does not (see [Standards](#standards)).
 
-1. **Install** (once): `sh scripts/build.sh` then `sh scripts/install.sh /path/to/vectorcraft-cli`. In the app the plug-ins appear under
-   Object > Plug-ins and in File > Open / Export As.
-2. **Open** a `.pmap` (File > Open).
-3. **Edit** the paths whose names are listed below: move a centerline point, drag a junction marker, change a lane profile point.
-4. **Build**: Edit > Select All, then Object > Plug-ins > Build Road. Old generated paths (`gen.*`) are replaced.
-5. **Export** with File > Export As > Road Builder road (.pmap).
+## What is in it
 
-Add a junction without dragging: Select All, then Object > Plug-ins > Road Builder > Add Junction (route metre, kind, side, street name).
+| Part | What it does |
+|---|---|
+| **Build Road** (plug-in, filter) | Regenerates everything from the lines you drew: road strips and paint, junctions, intersections, lane changes. Commands: Describe Road, Describe Junction, Make Intersection, Make Intersection of Three or More Roads, Add or Drop a Lane, Add Junction. |
+| **Road Builder road (.pmap)** (importer and exporter) | Opens and writes a compact, diff-friendly JSON road file (see [the .pmap format](#the-pmap-format)). |
+| **Companion panel** (a small local web page) | Follows your selection, takes a description in words, shows what a change would do before it happens, and draws it. |
+| **Element library** (`library/elements.json`) | 16 road elements with typical widths: lane, turn pocket, bike lane, apron, shoulder, margin, median, sidewalk, parking lane, railway ... |
+| **Standards database** (`library/standards.json`) | 56 dimensions from the MUTCD, PROWAG and state manuals, each with section, quote and a verified status. |
 
-## Roads from a description (new in 0.2)
+Written in Rust (plug-ins compiled to WebAssembly, sharing one core) and zero-dependency Node (the panel). MIT licensed.
 
-Draw any line (curves and angle points as you like), select it, and run **Object > Plug-ins > Road Builder > Describe Road**. Write the
-road as a short list, left to right, in plain words or the shorthand:
+## Quick start
+
+1. Download the latest release, unzip it, and run `sh install.sh` (puts the plug-ins into VectorCraft; needs `vectorcraft-cli`).
+2. Run `sh start.sh`: it opens VectorCraft with its control port, starts the panel and opens it in your browser.
+3. Draw a line, select it, describe the road, press **Draw**. Select two lines to make an intersection.
+
+Full walk-through: **[docs/GETTING-STARTED.md](docs/GETTING-STARTED.md)**. From source: `sh scripts/build.sh`, `sh scripts/install.sh`, `sh scripts/start-panel.sh`.
+Needs VectorCraft 0.24.1 or newer and Node 20 or newer; the plain-words agent needs Claude Code signed in (or another agent in `panel/providers.json`), the cards work without one.
+
+## What you can build
+
+**Roads from a description.** Draw any line (Bezier curves stay smooth, angle points stay sharp corners: outside mitred, inside trimmed) and describe the road left to right:
 
 ```
 facing N: bike-lane | apron | lane S x2 | margin 3 | lane N x2 | apron | bike-lane
 ```
 
-The line becomes `road.r1`, the description is stored in the document, and **Build Road** draws every element as a coloured strip with
-the right paint between them (dashed white between lanes going the same way, double yellow between opposite ways, curb lines at a
-margin, white edge lines), following the line exactly: Bezier curves stay smooth, an angle point stays a sharp corner (outside mitred,
-inside trimmed).
+Strips are filled and the paint between elements follows the MUTCD: dashed white between lanes the same way, double yellow between opposite ways, kerb lines at a margin. Break a line and both pieces keep the description; describe one piece alone and it gets its own.
 
-- **Elements** come from `library/elements.json` (lane, turn-pocket, bike-lane, apron, shoulder, margin, median, sidewalk, parking-lane,
-  and more), with typical US widths marked "typical, not surveyed". Any width can be overridden in the description (`lane 3.3`, `margin 10ft`).
-- **Break a line** (Split Path) and both pieces keep the description. To change one piece only, select it and run Describe Road with
-  scope `selected`: it gets an id of its own.
-- **The line follows** the middle of the median or margin when there is one (so removing a side element does not move the road), else the
-  middle of the road; change it with the `anchor` setting (`center`, `left`, `right`, or an element name).
-- Not built yet: junctions between described roads, turn pockets that start and end part-way along a road, lane arrows, and the
-  companion panel. See `docs/DESIGN.md`.
+**Lane changes.** Select a line, choose **Add or drop a lane on this line**: 1 to 3 lanes in one direction, on the driver's left (toward the centre) or right (toward the edge), over a taper that follows the MUTCD formula for the speed (or your length). Several in a row take a road from 1 to 4 lanes and back.
 
-## Junctions (new in 0.3)
+**Intersections** (select two roads, or three or more):
 
-Draw a short line between two road pieces (the gap), select it, and in the panel choose **A connection between two roads**. Either press
-**Connect and match** (the road is simply carried across the gap) or describe a junction in words:
+| Kind | What is drawn |
+|---|---|
+| Lighted intersection | Paved box at any angle, true-arc kerb returns, crosswalks, stop bars, a primary signal head on the far side and a supplemental one at the bar |
+| Two-way and four-way stop | Stop signs (30 or 36 in, to size) and stop bars where the rules put them |
+| Roads that only touch, driveway, offset and skewed tees | A side road drawn up to the kerb is found and carried onto the pavement; a driveway has a small return and no marks |
+| Stubs | A short road past the crossing is kept as a dead end (four-way) or trimmed to a three-way |
+| Turn pockets, slip lanes | Left pockets cut into a median, right pockets widen the road, length and taper; slip lanes with a kerbed island |
+| Median opening, mid-block crossing, railroad | An opening with kerbed noses; crosswalk bars over the lanes with yield lines and beacons; rails, ties, crossbucks and gates |
+| On-ramp and off-ramp (merge, converge, diverge) | Either side of the road, with a speed-change lane and a gore with chevrons |
+| Roundabout, overpass or underpass, cloverleaf | A ring with splitter islands and yield lines; a bridge deck; the bridge plus four loop ramps |
+| Three or more roads at a point | Arms sorted by bearing, a core bounded by neighbouring kerb lines, a kerb return at every corner |
 
-> This is a 4 way intersection. The west leg is a two lane rural road, the east is a two lane rural road. There are traffic lights and crosswalks.
+Every treatment, field and rule is in **[docs/SCENARIOS.md](docs/SCENARIOS.md)**.
 
-The road runs straight through. The legs, the paved box where they cross (the median is opened up), true-arc kerb corners, crosswalks, stop
-bars and signal heads or stop signs are drawn from the description. A junction is stored as small data (up to two legs, each with its own
-cross-section and length; control none, signal or stop; crosswalks; kerb radius) and the panel lets you adjust the control, the crosswalks
-and the legs before pressing Draw. In VectorCraft's menu the command is **Describe Junction**. Not built yet: turn pockets, curved legs,
-roundabouts and junctions that are not at right angles.
+**Junctions** (older model): a short line between two road pieces can carry the road across the gap or become a T or four-way junction with up to two legs.
 
-## Roads that cross (new in 0.4)
+## How it works
 
-Draw one road across another, select both, and the panel offers **Make an intersection**. Pick what happens where they cross:
-lighted intersection, two-way stop (the narrower road stops unless you name one), four-way stop, no control, overpass/underpass (one
-road bridges the other, with parapets and abutments), roundabout (counter-clockwise ring, splitter islands, yield lines). Crosswalks are
-optional. Any angle works (the paved box is a parallelogram; kerb corners are true arcs), and each road can curve: the local direction at
-the crossing is used. Cloverleaf is listed but not built yet.
-If one road runs only a short way past the crossing (under 25 m from the centre, adjustable as `stub_length`) you choose what to do with
-that **stub**: *keep it as a dead end* (a four-way with a kerbed end) or *trim it off* (a three-way: the built road stops at the other road's
-travel lane, which keeps its far kerb, bike lane and verge). Your drawn line is never cut, only what is built from it. Stored as `crossings.<id>` (`treatment`, `crosswalks`, `radius`, `minor`,
-`over`, `diameter`); menu command **Make Intersection**; `road-builder-cli parse-crossing`.
+- **Lines in, drawing out.** A line named `road.<id>` is a road; its description (cross-section, intersections, lane changes, hubs) is stored *in the VectorCraft document* as plug-in data. **Build Road** regenerates every `gen.*` shape from the lines and the stored descriptions, so rebuilding is repeatable and your lines are never edited. Intersections and lane changes cut or extend the *drawn* road only.
+- **One layer per road.** After each Draw the panel sorts the drawing into layers: `road r1` holds `road r1 spine` (the bold red line you edit, on top) and `road r1 drawing`. Hide or lock the spine and the road stays visible. A filter only sees visible, unlocked objects, so the panel shows and unlocks these layers for the rebuild and puts your hiding and locking back.
+- **The agent proposes, a checker decides.** An agent turns words into shorthand or JSON; a native helper (`road-builder-cli`) validates every answer (it must parse, use known elements and make sense for the road) and sends an invalid one back once. Nothing is applied until you press Draw, and every proposal lists **what it changes** in plain words. If an agent cannot give a valid answer, the panel tries its fallback agent. Notes from the build (things guessed or skipped) are shown in the panel.
+- **Agents are pluggable** (`panel/providers.json`): Claude (default, uses your Claude login), a command that reads a JSON request on stdin, any OpenAI-compatible endpoint, or Apple Intelligence on this Mac (optional; hidden if not installed). The panel listens on 127.0.0.1 only and refuses requests that did not come from its own page.
+- **Plug-in limits.** VectorCraft runs plug-ins in an interpreter under an instruction budget, so Build Road writes its output as text and thins redundant points; a 5 km road builds well within it.
 
-### More intersections (new in 0.5)
-The same panel card now offers: a **driveway** or side entrance, **left and right turn pockets** (with length and taper), **right-turn slip
-lanes** with an island, a **median opening** or U-turn crossover, an **on-ramp** or **off-ramp** with an acceleration or deceleration lane,
-a **mid-block pedestrian crossing** (beacons optional), a **railroad crossing** (rails, ties, crossbucks, gates; use the new `railway`
-element for the track), and a **cloverleaf** (the overpass and four loop ramps). A side road that only touches the other road, without
-crossing, is accepted: its drawing is carried on to the pavement. Select **three or more roads** that meet at a point and the card offers the
-same lighted, stop-sign or uncontrolled choices for all of them (a "hub"). Details and rules: `docs/SCENARIOS.md`.
+## Standards
 
-## One layer per road (new in 0.4)
+`library/standards.json` records the US standards behind the dimensions: the **MUTCD 11th Edition with Revision 1** (stop lines 12 to 24 in and set back 4 ft, crosswalk bars, yield-line triangles, gore chevrons, signal head position and height, STOP sign sizes, grade-crossing stop lines and gates), the **US Access Board PROWAG** (clear widths, refuge islands, curb ramp slopes), and state design manuals (FDOT, SCDOT, WisDOT) where the federal documents leave a number to the designer (turn-lane tapers and queues, median widths, roundabout sizes). Each entry has the section, a verbatim quote and a status: *verified* (read in the federal text), *verified-secondary* (a state manual) or *unverified*. A test ties the code's own constants to it and the document is generated: **[docs/STANDARDS.md](docs/STANDARDS.md)**. The NTSB investigates crashes and recommends changes; it does not publish design dimensions. Lane, bike-lane and kerb-radius widths are typical, not standards (the MUTCD sets none; the AASHTO Green Book does, and is copyrighted).
 
-After each Draw the panel sorts the drawing into layers: `road r1` holds `road r1 spine` (the red line you edit, on top) and `road r1 drawing`
-(everything built from it); junctions get the same two parts, an intersection gets one layer. Hide or lock a spine layer and the road stays
-visible. The panel shows and unlocks these layers just for the rebuild (a hidden or locked object is not seen by a filter, so its road would
-vanish) and puts your hiding and locking back afterwards. Rebuilding from VectorCraft's own menu does not sort layers; press Draw in the panel.
+## Documents
 
-## Lane changes, diverge and converge (new in 0.6)
-Select one line of a road and choose **Add or drop a lane on this line** (or describe it: "the right lane ends after 300 m"). The road gains or loses
-1 to 3 lanes in one direction, on the driver's left (toward the centre) or right (toward the edge), over a taper that follows the MUTCD formula for the
-speed unless you give a length. Several in a row take a road from 1 to 4 lanes and back. Ramps (on-ramp, off-ramp; "merge", "converge", "diverge",
-"exit") work on either side of the road and now draw the gore: the paved neutral area with white chevrons pointing toward approaching traffic.
-
-## Standards (new in 0.5)
-`library/standards.json` records the US design and dimension standards behind the drawing (MUTCD 11th Edition with Revision 1, US Access
-Board PROWAG, and state design manuals where the federal documents leave a number to the designer), each with section, quote and a verified
-status; `docs/STANDARDS.md` is the readable version. The NTSB investigates crashes and does not publish dimensions. Marking, crosswalk, stop-line,
-sign, railroad and roundabout-crosswalk dimensions follow the MUTCD; lane, bike-lane and kerb widths are typical, not standards.
-
-## The companion panel (new in 0.3)
-
-A small page beside VectorCraft where you describe roads in words and click them to see and change their elements:
-
-```
-sh scripts/start-panel.sh          # starts VectorCraft with its control port, the panel, and opens your browser
-```
-
-1. **Draw a line** in VectorCraft and select it. The panel says "a plain line is selected".
-2. **Describe it** in the box ("one bike lane, an apron, two south lanes, a 3 m grassy curbed margin, two north lanes, apron, bike lane")
-   and press **Propose**. An agent turns the words into the shorthand; you see the proposed elements to scale before anything changes.
-3. **Draw**. The road is built. Click a road later and its elements are listed: remove one (✕), move it (◀ ▶), change a width, or
-   describe a change in words ("delete the bike lane going south"). If you broke the line into pieces, choose *all pieces* or *only the
-   selected piece*.
-
-The agent is a plug-in point (`panel/providers.json`): Claude (default, uses your Claude login, no key), any command that reads a JSON
-request on stdin, or any OpenAI-compatible endpoint (local or hosted). Whatever the agent answers is checked by a native helper
-(`road-builder-cli`) before the panel will show or apply it, so no agent can change your drawing directly. The panel listens on
-127.0.0.1 only and ignores requests that did not come from its own page.
-
-Tests: `node --test panel/test/` (24, against a fake VectorCraft) and, with VectorCraft and the panel running,
-`node panel/live-check.mjs` replays the first story through the real app and a real agent.
+| | |
+|---|---|
+| [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) | Install and first steps, in plain language |
+| [docs/SCENARIOS.md](docs/SCENARIOS.md) | Every intersection and lane treatment, its fields and rules |
+| [docs/STANDARDS.md](docs/STANDARDS.md) | The standards database, generated |
+| [docs/DESIGN.md](docs/DESIGN.md) | Design notes and what each phase found |
+| [CHANGELOG.md](CHANGELOG.md) | What changed in each version |
+| [CLAUDE.md](CLAUDE.md) | Layout, traps and the recipe for adding a scenario (for people and agents working on the code) |
 
 ## What you edit with the older centerline model (naming contract)
 
@@ -152,24 +116,25 @@ returns the same bytes.
 ## Develop
 
 ```
-sh scripts/build.sh                                  # needs rustup + the wasm32-unknown-unknown target (see the script header)
-cargo test                                           # core logic natively, incl. import -> export round trip
-sh scripts/roundtrip.sh examples/sample.pmap out/ /path/to/vectorcraft-cli     # through the real VectorCraft engine
-node scripts/pmap-diff.mjs a.pmap b.pmap             # what changed, in plain words
-node scripts/vc.mjs <method> '<json>'                # drive a running VectorCraft (open -a VectorCraft --args --control 7979)
-node scripts/mcp-smoke.mjs <cli> x.pmap --demo out/y.pmap   # the same loop over the MCP protocol, as an agent does it
+sh scripts/build.sh                  # needs rustup + the wasm32-unknown-unknown target (see the script header)
+cargo test --release                 # 100 native tests: geometry, every scenario, the standards database, the round trip
+node --test panel/test/              # 53 panel tests against a fake VectorCraft (needs the helper: cargo build --release -p road-builder-cli)
+node scripts/standards.mjs check     # validates the standards database; "md" regenerates docs/STANDARDS.md
+sh scripts/package.sh 0.6.0          # builds the release package into dist/
+node scripts/vc.mjs <method> '<json>'   # drive a running VectorCraft (open -a VectorCraft --args --control 7979)
 ```
 
-Layout: `core/` (geometry, `pmap` import/export, `Build Road`, ABI glue; unit-tested natively), `filter/ exporter/ importer/` (thin
-plug-in crates), `scripts/`, `examples/`.
+CI (`.github/workflows/ci.yml`) runs the same on every push; pushing a tag like `v0.6.0` builds and publishes a release (`release.yml`).
+
+Layout: `core/` (geometry, cross-sections, roads, junctions, crossings, hubs, lane transitions, standards constants, ABI glue; unit-tested natively),
+`filter/ exporter/ importer/` (thin plug-in crates), `cli/` (the validating helper), `panel/` (server, page, layers, agents), `library/`, `docs/`,
+`scripts/`, `examples/`. Adding a scenario follows the recipe in `CLAUDE.md`: spec, geometry, tests with hand-worked numbers, panel card, agent prompt, docs.
 
 ### Limits worth knowing
 
-- VectorCraft runs plug-ins in an interpreter under an instruction budget (about 50 M plus 4,000 per input byte for a filter). Build
-  Road therefore writes its output as text and thins out redundant points; a 5.3 km road builds in well under the budget. Check
-  new features against the full-length road (`core/tests/real_map.rs`).
 - Plug-in command ids are lower-case with underscores; a parameter cannot be called `id`.
-- Build Road deletes the `gen.*` paths it is given and keeps everything else, but it only sees what is selected: always Select All first.
-- The Build styling (colours, dash lengths) is a plain placeholder; the website draws its own ballpoint style from the `.pmap` data.
+- Build Road deletes the `gen.*` paths it is given and keeps everything else, but it only sees what is selected, visible and unlocked: Select All first (the panel does this for you).
+- A lane change is drawn by sampling the line every 2 m: keep tapers on gentle curves. Cloverleaf draws the four loop ramps, not the diagonal connectors.
+- The Build styling (colours, dash lengths) is a plain placeholder.
 
 License: MIT.
