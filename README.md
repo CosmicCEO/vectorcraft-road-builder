@@ -3,6 +3,8 @@
 Draw a road as **one line**; Road Builder builds the lanes, kerbs, markings, signs, signals and intersections from it. Describe what you want in plain
 words or with a few choices, press **Draw**, and edit the line to reshape the road. Your line is never changed, only what is built from it.
 
+**Roadmap.** Phase 1 (done): draw a road as one line and the agentic plug-in builds everything else. Phase 2 (to do): import an image and create the map in vectors.
+
 <p align="center"><img src="docs/images/multi-lane.png" alt="A divided six-lane road crossing a divided four-lane road at a signalised intersection, with left and right turn pockets, slip lanes, crosswalks, and a lane added north of the intersection and dropped south of it" width="460"><br>
 <em>A complex multi-lane intersection, built from two lines: a divided 3+3-lane road with bike lanes and sidewalks crossing a divided 2+2-lane road at traffic signals, with left and right turn pockets (45 m, tapered), slip lanes with islands, crosswalks, a far-side signal head for each approach, a northbound lane added 70 m north of the intersection and a southbound lane dropped south of it.</em></p>
 
