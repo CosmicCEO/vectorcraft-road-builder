@@ -4,6 +4,7 @@
 use crate::geom::{P, Poly, add, scale};
 use crate::output::Out;
 use crate::crossing::{self, CrossingSpec};
+use crate::hub::{self, HubSpec};
 use crate::junction::{self, JunctionSpec, junction_id};
 use crate::roads::{self, Spec, anchor_from, segment_id};
 use crate::scene::{Scene, is_junction_name};
@@ -146,10 +147,12 @@ pub fn build_text(input: &Value, params: &Value) -> Result<String, String> {
         }
     }
     if has_road {
-        let trims = crossing::trims(&items, &spec);
+        let mut trims = crossing::trims(&items, &spec);
+        trims.extend(hub::trims(&items, &spec));
         roads::build_clipped(&items, &spec, &trims, &mut out);
         junction::build(&items, &spec, &mut out); // junctions are drawn over the roads they join
         crossing::build(&items, &spec, &mut out); // and so are intersections where two roads cross
+        hub::build(&items, &spec, &mut out); // and where three or more meet
     }
     if has_legacy {
         build_legacy(&mut out, &items, params)?;
@@ -369,6 +372,37 @@ pub fn set_crossing_text(input: &Value, params: &Value) -> Result<String, String
     }
     let id = spec.crossing_between(&a, &b).unwrap_or_else(|| (1..).map(|n| format!("k{n}")).find(|id| !spec.crossings().iter().any(|(k, _)| k == id)).unwrap_or_default());
     spec.set_crossing(&id, &cs);
+    let mut out = Out::new();
+    for it in &items {
+        if let Some(iid) = it.id {
+            out.keep(iid);
+        }
+    }
+    Ok(out.finish_with(Some(&spec.to_value())))
+}
+
+/// Command "Set Hub": three or more selected roads that meet at one point; stores the hub's description (see `hub`). `description` is JSON
+/// (treatment, crosswalks, radius, minor, stub); the road ids come from the selection.
+pub fn set_hub_text(input: &Value, params: &Value) -> Result<String, String> {
+    let items = items_from_filter_input(input);
+    let mut spec = Spec::from_document_data(&params["_context"]["documentData"]);
+    let mut roads: Vec<String> = Vec::new();
+    for it in &items {
+        if let Some(id) = segment_id(&it.name).filter(|id| !roads.contains(id)) {
+            roads.push(id);
+        }
+    }
+    if roads.len() < 3 {
+        return Err(format!("Select one line of each of three or more roads that meet at a point; {} road{} selected.", roads.len(), if roads.len() == 1 { " is" } else { "s are" }));
+    }
+    let mut value: Value = match params["description"].as_str().map(str::trim).filter(|t| !t.is_empty()) {
+        Some(raw) => serde_json::from_str(raw).map_err(|e| format!("the hub description is not valid JSON: {e}"))?,
+        None => json!({}),
+    };
+    value["roads"] = json!(roads);
+    let hs = HubSpec::from_json(&value)?;
+    let id = spec.hub_with(&roads).unwrap_or_else(|| (1..).map(|n| format!("h{n}")).find(|id| !spec.hubs().iter().any(|(k, _)| k == id)).unwrap_or_default());
+    spec.set_hub(&id, &hs);
     let mut out = Out::new();
     for it in &items {
         if let Some(iid) = it.id {

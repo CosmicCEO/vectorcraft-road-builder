@@ -119,6 +119,30 @@ impl Spec {
         }).map(|(id, _)| id)
     }
 
+    /// All stored hubs (three or more roads meeting at one point): id and description.
+    pub fn hubs(&self) -> Vec<(String, Value)> {
+        self.raw["hubs"].as_object().map(|m| m.iter().filter(|(_, v)| v.is_object()).map(|(k, v)| (k.clone(), v.clone())).collect()).unwrap_or_default()
+    }
+
+    /// The id of the stored hub of exactly these roads, in any order.
+    pub fn hub_with(&self, roads: &[String]) -> Option<String> {
+        self.hubs().into_iter().find(|(_, v)| {
+            let mut have: Vec<&str> = v["roads"].as_array().map(|r| r.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+            let mut want: Vec<&str> = roads.iter().map(String::as_str).collect();
+            have.sort_unstable();
+            want.sort_unstable();
+            have == want
+        }).map(|(id, _)| id)
+    }
+
+    /// Stores a hub description (already checked).
+    pub fn set_hub(&mut self, id: &str, spec: &crate::hub::HubSpec) {
+        if !self.raw["hubs"].is_object() {
+            self.raw["hubs"] = json!({});
+        }
+        self.raw["hubs"][id] = spec.to_json();
+    }
+
     /// Stores a crossing description (already checked).
     pub fn set_crossing(&mut self, id: &str, spec: &crate::crossing::CrossingSpec) {
         if !self.raw["crossings"].is_object() {

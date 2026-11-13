@@ -7,6 +7,7 @@ pub mod crosssection;
 pub mod scenarios;
 pub mod export;
 pub mod geom;
+pub mod hub;
 pub mod junction;
 pub mod library;
 pub mod offset;

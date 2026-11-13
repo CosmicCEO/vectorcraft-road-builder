@@ -8,7 +8,7 @@ use serde_json::Value;
 const MANIFEST: &str = r#"{
   "id": "com.cosmicceo.roadbuilder.build",
   "name": "Build Road",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "kind": "filter",
   "author": "CosmicCEO",
   "description": "Builds roads from the lines you draw: a line named road.<id> becomes the road described by its cross-section (lanes, bike lanes, margins ...). Select All first, so every road is included.",
@@ -43,6 +43,13 @@ const MANIFEST: &str = r#"{
       }
     },
     {
+      "id": "set_hub",
+      "label": "Make Intersection of Three or More Roads",
+      "params": {
+        "description": {"type": "string", "default": "{\"treatment\": \"signal\", \"crosswalks\": true}", "maxLength": 1000, "label": "Hub (JSON)", "help": "treatment: signal, two-way-stop, four-way-stop, uncontrolled; crosswalks; radius; minor; stub: keep or trim. Select one line of each road that meets at the point."}
+      }
+    },
+    {
       "id": "add_junction",
       "label": "Add Junction",
       "params": {
@@ -63,6 +70,7 @@ fn run(input: &[u8], params: &Value) -> Result<Output, String> {
         Some("set_cross_section") => builder::set_cross_section_text(&input, params),
         Some("set_junction") => builder::set_junction_text(&input, params),
         Some("set_crossing") => builder::set_crossing_text(&input, params),
+        Some("set_hub") => builder::set_hub_text(&input, params),
         _ => builder::build_text(&input, params),
     }
     .map(Output::Raw)

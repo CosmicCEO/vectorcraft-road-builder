@@ -187,7 +187,7 @@ pub enum Stub {
     Trim,
 }
 
-fn clean_id(s: &str) -> String {
+pub(crate) fn clean_id(s: &str) -> String {
     s.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(16).collect()
 }
 
@@ -307,7 +307,7 @@ pub(crate) fn unit(v: P) -> P {
     [v[0] / m, v[1] / m]
 }
 
-fn pieces(items: &[Item], road: &str) -> Vec<(usize, Vec<P>)> {
+pub(crate) fn pieces(items: &[Item], road: &str) -> Vec<(usize, Vec<P>)> {
     items.iter().enumerate().filter(|(_, i)| segment_id(&i.name).as_deref() == Some(road)).filter_map(|(k, i)| i.subs.first().map(|s| (k, s.iter().map(|&p| flip(p)).collect()))).collect()
 }
 
@@ -419,7 +419,7 @@ pub(crate) fn arc_points(centre: P, radius: f64, a1: f64, delta: f64) -> Vec<P> 
 }
 
 /// A kerb return between two edges that meet at corner `c`, leaving along `d1` and `d2` (unit vectors): the arc and the paved fill behind it.
-fn fillet(c: P, d1: P, d2: P, r: f64) -> Option<(Vec<P>, Vec<P>)> {
+pub(crate) fn fillet(c: P, d1: P, d2: P, r: f64) -> Option<(Vec<P>, Vec<P>)> {
     let (centre, a1, delta, _) = fillet_parts(c, d1, d2, r)?;
     let arc = arc_points(centre, r, a1, delta);
     let mut fill = vec![c];
